@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { COOKIE, makeToken, passwordMatches, TTL_MS } from '@/lib/admin-token'
 import { parseQuestionsCsv, toQuestion } from '@/lib/csv'
 import { parseQuestionsXlsx } from '@/lib/excel'
-import { finishRound, forceSubmitAll as attemptsForceSubmitAll } from '@/lib/attempts'
+import { finishRound, forceSubmitAll as attemptsForceSubmitAll, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
@@ -56,12 +56,25 @@ function sessionFields(f: FormData) {
   // Only the chosen mode's time: the form disables (so doesn't send) the other, which keeps its stored value.
   const time: Partial<Pick<Session, 'duration_sec' | 'per_question_sec'>> =
     timer_mode === 'total' ? { duration_sec: int('duration_min', 1, 600) * 60 } : { per_question_sec: int('per_question_sec', 5, 600) }
-  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20) }
+  // Post-test only: the pre-test its participants' scores are compared with (by NIM). Checked in pairWith.
+  const pre = kind === 'post' ? String(f.get('pre_session_id') ?? '') : ''
+  if (pre && !UUID.test(pre)) throw new Error('Pasangan pre-test tidak valid')
+  // Sent only for post-tests (a pre-test's stale pair is ignored, see lib/attempts.ts view).
+  const pair: { pre_session_id?: string | null } = kind === 'post' ? { pre_session_id: pre || null } : {}
+  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20), ...pair }
+}
+
+// The chosen pair must be an existing pre-test (and not the session itself).
+async function checkPair(preId: string | null, selfId?: string) {
+  if (!preId) return
+  const pre: Pick<Session, 'id' | 'kind'> | null = must(await db().from('exam_sessions').select('id, kind').eq('id', preId).maybeSingle())
+  if (!pre || pre.kind !== 'pre' || pre.id === selfId) throw new Error('Pasangan pre-test tidak valid')
 }
 
 export async function createSession(formData: FormData) {
   await requireAdmin()
   const fields = sessionFields(formData)
+  await checkPair(fields.pre_session_id ?? null)
   for (let i = 0; i < 5; i++) {
     const { data, error } = await db().from('exam_sessions').insert({ ...fields, code: newCode() }).select('id').single()
     if (error?.code === '23505') continue // code collision, try another
@@ -74,6 +87,7 @@ export async function createSession(formData: FormData) {
 export async function updateSession(id: string, formData: FormData) {
   await requireAdmin()
   const fields = sessionFields(formData)
+  await checkPair(fields.pre_session_id ?? null, id)
   // The shared clock and attempts use the current settings (deadlines, per-question order);
   // changing them underneath would move deadlines or let per-question takers go back.
   if (await isLocked(id)) {
@@ -241,6 +255,8 @@ export async function duplicateSession(sessionId: string) {
         duration_sec: source.duration_sec,
         per_question_sec: source.per_question_sec,
         max_violations: source.max_violations,
+        // A post-test made from a pre-test is paired with it, so scores can be compared.
+        ...(newKind === 'post' ? { pre_session_id: source.id } : {}),
         is_open: false,
         code: newCode(),
       })

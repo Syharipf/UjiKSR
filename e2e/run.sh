@@ -23,7 +23,7 @@ PGRST_DB_URI=postgres://postgres:postgres@127.0.0.1:5433/postgres PGRST_DB_SCHEM
   PGRST_JWT_SECRET=$SECRET PGRST_DB_POOL=1 PGRST_DB_CHANNEL_ENABLED=false PGRST_SERVER_PORT=3001 \
   PGRST_DB_PREPARED_STATEMENTS=false "$BIN" > .bin/postgrest.log 2>&1 & PIDS+=($!)
 (cd .. && SUPABASE_URL=http://localhost:54321 SUPABASE_SECRET_KEY=$KEY ADMIN_PASSWORD=rahasia-e2e \
-  exec bun run dev --port 3100) > .bin/next.log 2>&1 & PIDS+=($!)
+  exec bun run start --port 3100) > .bin/next.log 2>&1 & PIDS+=($!)
 until curl -sf -o /dev/null http://localhost:3100/; do sleep 1; done
 
 bun e2e.ts

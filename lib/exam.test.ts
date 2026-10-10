@@ -240,4 +240,18 @@ describe('buildView', () => {
     expect(JSON.stringify(active)).not.toContain('score')
     expect(active.results_at).toBeNull()
   })
+
+  it('adds correct count, time used and the paired pre-test score only once released', () => {
+    const done = attempt({ answers: { q1: 0, q2: 0 }, started_at: iso(T0), submitted_at: iso(T0 + 692_000), submit_reason: 'manual', score: 33 })
+    const hidden = buildView(done, session(), questions, new Date(T0), { released: false, at: T0 }, 55)
+    expect(hidden.correct).toBeUndefined()
+    expect(hidden.time_used_ms).toBeUndefined()
+    expect(hidden.pre_score).toBeUndefined()
+    const shown = buildView(done, session(), questions, new Date(T0), { released: true, at: null }, 55)
+    expect(shown.correct).toBe(1)
+    expect(shown.time_used_ms).toBe(692_000)
+    expect(shown.pre_score).toBe(55)
+    expect(buildView(done, session(), questions, new Date(T0), { released: true, at: null }, null).pre_score).toBeNull()
+    expect('pre_score' in buildView(done, session(), questions, new Date(T0), { released: true, at: null })).toBe(false)
+  })
 })

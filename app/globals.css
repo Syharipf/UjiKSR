@@ -4,77 +4,123 @@
    instead of raw palette colors so both themes stay in sync.
    Theme: <html data-theme="light|dark"> is the user's choice (theme-toggle.tsx);
    no attribute means "follow the device". */
+/* Identity: KSR PMI. Merah PMI for the brand and the main action, navy (IFRC's second primary colour)
+   for structure: the admin bar, a chosen answer, progress. The seven-segment rule (.prinsip) stands for the
+   Seven Fundamental Principles of the Movement. The red cross emblem itself is protected by law
+   (UU 1/2018) and is never drawn.
+   Theme: <html data-theme="light|dark"> is the user's choice (theme-toggle.tsx); no attribute follows the device. */
 :root {
   color-scheme: light dark;
-  --page: var(--color-slate-50);
-  --surface: var(--color-white);
-  --subtle: var(--color-slate-100);
-  --line: var(--color-slate-200);
-  --line-strong: var(--color-slate-300);
-  --fg: var(--color-slate-900);
-  --secondary: var(--color-slate-600);
-  --muted: var(--color-slate-500);
-  --danger: var(--color-red-600);
-  --danger-soft: var(--color-red-50);
-  --danger-line: var(--color-red-300);
-  --warn-soft: var(--color-amber-100);
-  --ok: var(--color-green-700);
-  --ok-soft: var(--color-green-50);
-  /* Logo palette (public/logo.svg): "hijau teks" on light, neon trim on dark. White on #127a35 is 5.4:1. */
-  --primary: #127a35;
-  --primary-hover: #0b5a26;
-  --primary-soft: var(--color-green-50);
-  --on-primary: var(--color-white);
-  --glow: color-mix(in oklab, #127a35 8%, transparent);
+  --page: #eff2f6;
+  --surface: #ffffff;
+  --subtle: #e8ecf2;
+  --track: #e3e8ef;
+  --line: #d8dee8;
+  --line-strong: #b4bfd0;
+  --fg: #0f1a2e;
+  --secondary: #33405a;
+  --muted: #56627a;
+  --navy: #13294b;
+  --navy-text: #1d4e9e;
+  --navy-soft: #e3eaf6;
+  --on-navy: #ffffff;
+  --bar: #13294b;
+  --danger: #b3122b;
+  --danger-soft: #fce9ec;
+  --danger-line: #eba6b1;
+  --warn: #a6520a;
+  --warn-soft: #fcefdd;
+  --ok: #0f7a4a;
+  --ok-soft: #e1f3e9;
+  --primary: #c8102e;
+  --primary-hover: #a00c24;
+  --primary-soft: #fce9ec;
+  --on-primary: #ffffff;
+  --band: #c8102e;
+  --on-band: #ffffff;
+  --tier-1: #0f7a4a;
+  --tier-2: #3f8f5f;
+  --tier-3: #56627a;
+  --tier-4: #d97706;
+  --tier-5: #c8102e;
+  --shadow: 0 1px 2px rgb(15 26 46 / 0.05), 0 4px 16px -6px rgb(15 26 46 / 0.1);
 }
 :root[data-theme="light"] {
   color-scheme: light;
 }
 /* Dark values appear twice (device setting / explicit choice); light-dark() would avoid that
-   but needs Chrome 123+, and participants may be on older phones. */
+   but needs Chrome 123+, and participants may be on older phones. Keep both blocks identical. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: var(--color-slate-950);
-  --surface: var(--color-slate-900);
-  --subtle: var(--color-slate-800);
-  --line: var(--color-slate-800);
-  --line-strong: var(--color-slate-600);
-  --fg: var(--color-slate-100);
-  --secondary: var(--color-slate-300);
-  --muted: var(--color-slate-400);
-  --danger: var(--color-red-400);
-  --danger-soft: color-mix(in oklab, var(--color-red-600) 20%, transparent);
-  --danger-line: var(--color-red-800);
-  --warn-soft: color-mix(in oklab, var(--color-amber-500) 25%, transparent);
-  --ok: var(--color-green-400);
-  --ok-soft: color-mix(in oklab, var(--color-green-500) 18%, transparent);
-  --primary: #3cf06e;
-  --primary-hover: #6cf592;
-  --primary-soft: color-mix(in oklab, #3cf06e 14%, transparent);
-  --on-primary: #0f1f16;
-  --glow: color-mix(in oklab, #3cf06e 10%, transparent);
+  --page: #0b1527;
+  --surface: #13213a;
+  --subtle: #1b2b48;
+  --track: #1f3152;
+  --line: #24365a;
+  --line-strong: #3a5079;
+  --fg: #eef2f8;
+  --secondary: #c9d3e3;
+  --muted: #9aa8c1;
+  --navy: #8fb2ff;
+  --navy-text: #8fb2ff;
+  --navy-soft: #1e3560;
+  --on-navy: #0b1527;
+  --bar: #0f1f3a;
+  --danger: #ff7b88;
+  --danger-soft: #3a1520;
+  --danger-line: #7a2335;
+  --warn: #f3b14e;
+  --warn-soft: #33260f;
+  --ok: #4fd18b;
+  --ok-soft: #123326;
+  --primary: #ff5a6a;
+  --primary-hover: #ff7d8a;
+  --primary-soft: #3a1520;
+  --on-primary: #1a0507;
+  --band: #a30e26;
+  --on-band: #fff5f6;
+  --tier-1: #4fd18b;
+  --tier-2: #8fd9a8;
+  --tier-3: #9aa8c1;
+  --tier-4: #f3b14e;
+  --tier-5: #ff5a6a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px -8px rgb(0 0 0 / 0.5);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --page: var(--color-slate-950);
-    --surface: var(--color-slate-900);
-    --subtle: var(--color-slate-800);
-    --line: var(--color-slate-800);
-    --line-strong: var(--color-slate-600);
-    --fg: var(--color-slate-100);
-    --secondary: var(--color-slate-300);
-    --muted: var(--color-slate-400);
-    --danger: var(--color-red-400);
-    --danger-soft: color-mix(in oklab, var(--color-red-600) 20%, transparent);
-    --danger-line: var(--color-red-800);
-    --warn-soft: color-mix(in oklab, var(--color-amber-500) 25%, transparent);
-    --ok: var(--color-green-400);
-    --ok-soft: color-mix(in oklab, var(--color-green-500) 18%, transparent);
-    --primary: #3cf06e;
-    --primary-hover: #6cf592;
-    --primary-soft: color-mix(in oklab, #3cf06e 14%, transparent);
-    --on-primary: #0f1f16;
-    --glow: color-mix(in oklab, #3cf06e 10%, transparent);
+    --page: #0b1527;
+    --surface: #13213a;
+    --subtle: #1b2b48;
+    --track: #1f3152;
+    --line: #24365a;
+    --line-strong: #3a5079;
+    --fg: #eef2f8;
+    --secondary: #c9d3e3;
+    --muted: #9aa8c1;
+    --navy: #8fb2ff;
+    --navy-text: #8fb2ff;
+    --navy-soft: #1e3560;
+    --on-navy: #0b1527;
+    --bar: #0f1f3a;
+    --danger: #ff7b88;
+    --danger-soft: #3a1520;
+    --danger-line: #7a2335;
+    --warn: #f3b14e;
+    --warn-soft: #33260f;
+    --ok: #4fd18b;
+    --ok-soft: #123326;
+    --primary: #ff5a6a;
+    --primary-hover: #ff7d8a;
+    --primary-soft: #3a1520;
+    --on-primary: #1a0507;
+    --band: #a30e26;
+    --on-band: #fff5f6;
+    --tier-1: #4fd18b;
+    --tier-2: #8fd9a8;
+    --tier-3: #9aa8c1;
+    --tier-4: #f3b14e;
+    --tier-5: #ff5a6a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px -8px rgb(0 0 0 / 0.5);
   }
 }
 
@@ -82,48 +128,76 @@
   --color-page: var(--page);
   --color-surface: var(--surface);
   --color-subtle: var(--subtle);
+  --color-track: var(--track);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-fg: var(--fg);
   --color-secondary: var(--secondary);
   --color-muted: var(--muted);
+  --color-navy: var(--navy);
+  --color-navy-text: var(--navy-text);
+  --color-navy-soft: var(--navy-soft);
+  --color-on-navy: var(--on-navy);
+  --color-bar: var(--bar);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-danger-line: var(--danger-line);
+  --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-primary: var(--primary);
   --color-primary-soft: var(--primary-soft);
   --color-on-primary: var(--on-primary);
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --color-band: var(--band);
+  --color-on-band: var(--on-band);
+  --color-tier-1: var(--tier-1);
+  --color-tier-2: var(--tier-2);
+  --color-tier-3: var(--tier-3);
+  --color-tier-4: var(--tier-4);
+  --color-tier-5: var(--tier-5);
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* A faint green glow at the top of every page: brand colour without competing with content. */
 body {
   /* Long unbroken text (links, pasted names) wraps instead of pushing the page sideways on phones.
-     Flex/grid items holding such text also need min-w-0. (Not `anywhere`: that lets flex squeeze
-     short labels like the timer into one letter per line.) */
+     Flex/grid items holding such text also need min-w-0. */
   overflow-wrap: break-word;
-  background-image: radial-gradient(ellipse 80% 280px at 50% 0, var(--glow), transparent);
-  background-repeat: no-repeat;
+  font-variant-numeric: tabular-nums;
 }
 
 :where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--navy);
   outline-offset: 2px;
 }
 
 /* Shared building blocks. Combine: `btn btn-primary`, `card p-4`, `field`. In the components layer,
    so any utility (`w-full`, `border-danger-line`, …) still overrides them. */
 @layer components {
+  /* Headings in Archivo's expanded width. Body text stays normal width. */
+  .display {
+    font-stretch: 125%;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.06;
+  }
+
+  /* Seven segments, one per Fundamental Principle (app/prinsip.tsx). */
+  .prinsip {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .prinsip > span {
+    height: 4px;
+    border-radius: 2px;
+    background: currentColor;
+  }
   .card {
     border: 1px solid var(--line);
-    border-radius: 1rem;
+    border-radius: 0.875rem;
     background: var(--surface);
-    box-shadow:
-      0 1px 2px rgb(15 23 42 / 0.04),
-      0 2px 8px rgb(15 23 42 / 0.04);
+    box-shadow: var(--shadow);
   }
   .btn {
     position: relative; /* PendingLabel centres its spinner on the button */
@@ -133,8 +207,8 @@ body {
     gap: 0.5rem;
     min-height: 2.75rem;
     padding: 0.5rem 1.25rem;
-    border-radius: 0.75rem;
-    font-weight: 600;
+    border-radius: 0.625rem;
+    font-weight: 700;
     cursor: pointer;
     transition:
       background-color 150ms,
@@ -162,8 +236,15 @@ body {
     color: var(--muted);
     opacity: 1;
   }
+  .btn-navy {
+    background: var(--navy);
+    color: var(--on-navy);
+  }
+  .btn-navy:hover:not(:disabled) {
+    opacity: 0.9;
+  }
   .btn-secondary {
-    border: 1px solid var(--line-strong);
+    border: 1.5px solid var(--line-strong);
     background: var(--surface);
   }
   .btn-secondary:hover:not(:disabled) {
@@ -181,13 +262,14 @@ body {
     min-height: 2.75rem;
     font-size: 1rem; /* iPhone Safari zooms into any input smaller than 16px */
     border: 1px solid var(--line-strong);
-    border-radius: 0.75rem;
+    border-radius: 0.625rem;
     background: var(--surface);
     padding: 0.5rem 0.75rem;
     transition: border-color 150ms;
   }
   .field:focus {
-    border-color: var(--primary);
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px var(--navy-soft);
   }
   .field:disabled {
     background: var(--subtle);

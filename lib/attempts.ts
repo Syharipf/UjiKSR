@@ -114,7 +114,30 @@ export function resultsStatus(session: Session): Promise<ResultsStatus> {
 
 export async function view(ctx: Ctx, now: Date) {
   const results = ctx.attempt.submitted_at ? await resultsStatus(ctx.session) : undefined
-  return buildView(ctx.attempt, ctx.session, ctx.questions, now, results)
+  const pre = results?.released && ctx.session.kind === 'post' && ctx.session.pre_session_id ? await preScore(ctx.session.pre_session_id, ctx.attempt.nim) : undefined
+  return buildView(ctx.attempt, ctx.session, ctx.questions, now, results, pre)
+}
+
+// A post-test's paired pre-test score for the same NIM (null when there is none). Matched like the
+// admin comparison (lib/report.ts compareScores): trimmed, case-insensitive. When scores are released
+// everyone asks at once, so the pre-test's scores are fetched once per few seconds per server instance.
+const preScores = new Map<string, { until: number; rows: Promise<Map<string, number>> }>()
+const normNim = (nim: string) => nim.trim().toUpperCase()
+
+async function preScore(preSessionId: string, nim: string): Promise<number | null> {
+  let hit = preScores.get(preSessionId)
+  if (!hit || hit.until <= Date.now()) {
+    const rows = (async () => {
+      const list: { nim: string; score: number | null }[] = must(
+        await db().from('attempts').select('nim, score').eq('session_id', preSessionId).not('submitted_at', 'is', null),
+      )
+      return new Map(list.filter((r) => r.score !== null).map((r) => [normNim(r.nim), r.score!]))
+    })()
+    hit = { until: Date.now() + 5000, rows }
+    preScores.set(preSessionId, hit)
+    rows.catch(() => preScores.delete(preSessionId))
+  }
+  return (await hit.rows).get(normNim(nim)) ?? null
 }
 
 // Participants who closed the browser never trigger their own timeout: settle every attempt whose

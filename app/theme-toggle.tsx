@@ -3,10 +3,9 @@
 import { useSyncExternalStore } from 'react'
 import { THEME_KEY } from '@/lib/theme'
 
-type Theme = 'system' | 'light' | 'dark'
+type Theme = 'light' | 'dark'
 
-const NEXT: Record<Theme, Theme> = { system: 'light', light: 'dark', dark: 'system' }
-const LABEL: Record<Theme, string> = { system: 'Otomatis', light: 'Terang', dark: 'Gelap' }
+const LABEL: Record<Theme, string> = { light: 'Terang', dark: 'Gelap' }
 
 const listeners = new Set<() => void>()
 const subscribe = (cb: () => void) => {
@@ -14,31 +13,36 @@ const subscribe = (cb: () => void) => {
   return () => listeners.delete(cb)
 }
 const read = (): Theme => {
+  if (typeof document === 'undefined') return 'light'
   const t = document.documentElement.dataset.theme
-  return t === 'light' || t === 'dark' ? t : 'system'
+  if (t === 'light' || t === 'dark') return t
+  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark'
+  return 'light'
 }
 
 function apply(theme: Theme) {
   const root = document.documentElement
-  if (theme === 'system') delete root.dataset.theme
-  else root.dataset.theme = theme
+  root.dataset.theme = theme
   try {
-    if (theme === 'system') localStorage.removeItem(THEME_KEY)
-    else localStorage.setItem(THEME_KEY, theme)
+    localStorage.setItem(THEME_KEY, theme)
   } catch {}
   listeners.forEach((l) => l())
 }
 
-// Cycles Otomatis (follow device) → Terang → Gelap. `compact` shows only the icon.
-export default function ThemeToggle({ compact = false }: Readonly<{ compact?: boolean }>) {
-  const theme = useSyncExternalStore(subscribe, read, () => 'system' as Theme)
+// `onBand` when it sits on the red mitela band.
+// 2-way toggle: Terang ↔ Gelap with instant 1-click visual feedback. `compact` shows only the icon.
+export default function ThemeToggle({ compact = false, onBand = false }: Readonly<{ compact?: boolean; onBand?: boolean }>) {
+  const theme = useSyncExternalStore(subscribe, read, () => 'light' as Theme)
+  const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark'
   return (
     <button
       type="button"
-      onClick={() => apply(NEXT[theme])}
-      aria-label={`Tema: ${LABEL[theme]}. Ketuk untuk ganti.`}
-      title={`Tema: ${LABEL[theme]}`}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-2.5 py-1 text-xs"
+      onClick={() => apply(nextTheme)}
+      aria-label={`Tema: ${LABEL[theme]}. Ketuk untuk ganti ke mode ${LABEL[nextTheme].toLowerCase()}.`}
+      title={`Tema: ${LABEL[theme]} (ketuk untuk mode ${LABEL[nextTheme].toLowerCase()})`}
+      className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+        onBand ? 'border-on-band/40 hover:bg-on-band/10' : 'border-line-strong hover:bg-subtle'
+      }`}
     >
       <Icon theme={theme} />
       {!compact && LABEL[theme]}
@@ -56,17 +60,9 @@ function Icon({ theme }: Readonly<{ theme: Theme }>) {
       </svg>
     )
   }
-  if (theme === 'dark') {
-    return (
-      <svg {...common}>
-        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-      </svg>
-    )
-  }
   return (
     <svg {...common}>
-      <rect x="3" y="4" width="18" height="12" rx="2" />
-      <path d="M8 20h8M12 16v4" />
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
     </svg>
   )
 }

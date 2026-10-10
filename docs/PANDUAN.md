@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../public/logo.svg" alt="Logo UjiKSR" width="80" height="80">
+  <img src="../public/logo.svg" alt="Logo UjiKSR" height="64">
 </p>
 
 <h1 align="center">Buku Panduan UjiKSR</h1>
@@ -72,6 +72,7 @@ Di halaman **Sesi ujian**, isi form **Buat sesi baru**, lalu klik **Buat sesi**.
 | **Judul** | Nama ujian, maksimal 120 karakter. Contoh: *Pre-test Diklat Dasar KSR 2026*. |
 | **Tanggal sesi** | Tanggal pelaksanaan. Dipakai untuk mengurutkan dan membedakan sesi. |
 | **Jenis** | *Pre-test* atau *Post-test*. Menentukan sesi mana yang bisa dibandingkan. |
+| **Pre-test rujukan** | *(Khusus Post-test)* Pilih sesi pre-test pasangannya untuk membandingkan peningkatan nilai secara otomatis. |
 | **Mode timer** | *Per soal*: tiap soal punya waktu dan tidak bisa kembali; paling ketat. *Total*: satu waktu untuk semua soal dan bebas bolak-balik. |
 | **Durasi total** | 1–600 menit. Hanya dipakai di mode total; tidak bisa diisi kalau mode per soal dipilih. |
 | **Waktu per soal** | 5–600 detik. Hanya dipakai di mode per soal; tidak bisa diisi kalau mode total dipilih. Total waktunya = waktu per soal × jumlah soal. |
@@ -171,14 +172,13 @@ Nilai baru muncul di HP peserta kalau **sesi sudah ditutup dan semua peserta sud
 
 ### 3.5 Membandingkan pre-test dan post-test
 
-Dari halaman **Sesi ujian**, klik **Bandingkan pre-test vs post-test**, pilih sesi pre-test dan post-test, lalu klik **Bandingkan**.
+Dari halaman **Sesi ujian**, klik **Bandingkan pre-test vs post-test**, pilih sesi pre-test dan post-test (otomatis terpilih jika sudah dipasangkan saat membuat sesi Post-test), lalu klik **Bandingkan**.
 
 <p align="center"><img src="img/admin-compare.webp" width="760" alt="Perbandingan pre-test dan post-test"></p>
 
-- Peserta dicocokkan lewat **NIM**, jadi pastikan peserta mengetik NIM yang sama di kedua ujian.
-- Ditampilkan rata-rata pre, rata-rata post, dan rata-rata peningkatan, serta selisih nilai tiap peserta.
+- Peserta dicocokkan otomatis lewat **NIM** (berupa angka). Pastikan peserta mengetik NIM yang sama persis di kedua ujian.
+- Ditampilkan rata-rata pre, rata-rata post, rata-rata peningkatan (delta), serta selisih nilai tiap peserta lengkap dengan indikator visual.
 - Peserta yang hanya ikut salah satu ujian ditampilkan dengan tanda `–`.
-
 ---
 
 ## 4. Panduan peserta
@@ -191,11 +191,11 @@ Dari halaman **Sesi ujian**, klik **Bandingkan pre-test vs post-test**, pilih se
 - Satu HP hanya bisa dipakai **satu peserta** per sesi. Setelah selesai, HP itu hanya bisa membuka nilai.
 - Pastikan baterai cukup dan internet stabil.
 - Aktifkan mode **Jangan Ganggu** dan tutup aplikasi lain.
-- Siapkan **NIM**. Ketik NIM yang sama persis di pre-test dan post-test.
+- Siapkan **NIM** (hanya berupa angka). Ketik NIM yang sama persis di pre-test dan post-test.
 
 ### 4.2 Masuk ujian
 
-Scan QR dari panitia, atau buka **ujiksr.vercel.app** lalu ketik kode sesi. Baca aturan ujian, isi **Nama lengkap** dan **NIM**, lalu tekan **Mulai ujian**. Layar otomatis masuk mode layar penuh.
+Scan QR dari panitia, atau buka **ujiksr.vercel.app** lalu ketik kode sesi. Baca aturan ujian, isi **Nama lengkap**, **NIM** (hanya angka), dan **Program Studi**, lalu tekan **Masuk ujian**. Layar otomatis masuk mode layar penuh.
 
 <table align="center">
   <tr>
@@ -217,7 +217,7 @@ Di bagian atas layar ada judul ujian, jumlah pelanggaran, dan **sisa waktu**. Ti
 
 - **Mode total**: semua soal tampil dalam satu halaman. Ketuk jawaban untuk memilih, dan jawaban boleh diganti. Kalau sudah selesai, tekan **Kumpulkan jawaban**, lalu konfirmasi dengan **Kumpulkan**. Kalau waktu habis, jawaban dikumpulkan otomatis.
 - **Mode per soal**: soal tampil satu per satu. Pilih jawaban lalu tekan **Jawab & lanjut** (atau **Jawab & selesai** di soal terakhir). Soal yang waktunya habis **dilewati** dan dihitung salah. Soal sebelumnya **tidak bisa dibuka lagi**.
-- Tombol tema (ikon monitor, matahari, atau bulan) mengganti tampilan terang/gelap. Tidak ada pengaruhnya ke ujian.
+- Tombol tema (ikon ☀️ matahari atau 🌙 bulan) mengganti tampilan Terang/Gelap secara instan 1-klik. Tidak ada pengaruhnya ke jalannya ujian.
 
 ### 4.4 Pelanggaran dan peringatan
 

@@ -1,15 +1,22 @@
 import type { Metadata, Viewport } from 'next'
-import { Plus_Jakarta_Sans } from 'next/font/google'
+import localFont from 'next/font/local'
 import Script from 'next/script'
 import { themeScript } from '@/lib/theme'
 import './globals.css'
 
-const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' })
+// Archivo (OFL, app/fonts/Archivo-OFL.txt), self-hosted so builds don't depend on Google Fonts.
+// Variable weight and width: headings use the expanded cut (.display in globals.css), body text the normal one.
+const archivo = localFont({
+  src: './fonts/archivo-variable.woff2',
+  weight: '100 900',
+  declarations: [{ prop: 'font-stretch', value: '62% 125%' }],
+  variable: '--font-archivo',
+})
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
-    { media: '(prefers-color-scheme: dark)', color: '#020617' },
+    { media: '(prefers-color-scheme: light)', color: '#c8102e' },
+    { media: '(prefers-color-scheme: dark)', color: '#a30e26' },
   ],
 }
 
@@ -22,7 +29,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     // suppressHydrationWarning: themeScript may set data-theme before React hydrates.
-    <html lang="id" suppressHydrationWarning className={jakarta.variable}>
+    <html lang="id" suppressHydrationWarning className={archivo.variable}>
       <head>
         <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

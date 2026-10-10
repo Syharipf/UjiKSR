@@ -44,7 +44,7 @@ async function createSession(page: Page, title: string, kind: 'pre' | 'post', mo
   await page.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await page.waitForURL(/\/admin\/sessions\//)
   const code = (await page.locator('text=/kode [A-Z0-9]{6}/').innerText()).match(/kode ([A-Z0-9]{6})/)![1]
-  await page.click('summary:has-text("Upload CSV")')
+  await page.click('summary:has-text("Upload file soal")')
   await page.setInputFiles('input[type=file]', CSV)
   await page.click('text=Upload & ganti semua soal')
   await page.getByText('4 soal tersimpan').waitFor()
@@ -78,12 +78,12 @@ async function participant(browser: Browser, code: string, name: string, nim: st
   await page.fill('input[name=prodi]', 'S1 TI')
   await page.click('text=Masuk ujian')
   await page.waitForURL(/\/exam\//)
-  await (active ? page.getByText(/Pelanggaran 0\//) : page.getByText('Tunggu panitia memulai ujian')).waitFor()
+  await (active ? page.getByText(/Pelanggaran 0 dari/) : page.getByText('Menunggu panitia memulai ujian')).waitFor()
   return { page, views }
 }
 
 async function pick(page: Page, text: string) {
-  await page.locator('main button', { hasText: new RegExp(`^(?:[A-E]\\.\\s?)?${text}$`) }).first().click()
+  await page.locator('main [role=group] button', { hasText: new RegExp(`^(?:[A-ES]\\.?\\s?)?${text}$`) }).first().click()
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium-browser' })
@@ -112,13 +112,13 @@ try {
   log('participant enters fullscreen on joining and waits in the lobby; no questions sent, submitting is refused')
   await startExam(adminPage, pre.url)
   await a.page.getByText('Ujian dimulai dalam').waitFor()
-  await a.page.getByText(/Pelanggaran 0\//).waitFor(STARTED)
+  await a.page.getByText(/Pelanggaran 0 dari/).waitFor(STARTED)
   log('"Mulai ujian" shows a countdown on the waiting phone, then the questions appear without a reload')
-  const questions = a.page.locator('main section')
-  assert.equal(await questions.count(), 4)
-  // Scope each pick to its question: "Benar"/"Salah" appear in both true/false questions.
-  for (const [question, answer] of KEY) {
-    await a.page.locator('main section').filter({ hasText: question }).getByRole('button', { name: new RegExp(`^(?:[A-E]\\.\\s?)?${answer}$`) }).click()
+  // Total mode shows one question at a time; walk through them with "Berikutnya".
+  for (let n = 1; n <= 4; n++) {
+    await a.page.getByText(`Soal ${n} dari 4`).waitFor()
+    await pick(a.page, answerFor(await a.page.locator('main [data-question]').innerText()))
+    if (n < 4) await a.page.getByRole('button', { name: 'Berikutnya' }).click()
   }
   // no pause: submit must queue behind the in-flight answers
   await a.page.click('text=Kumpulkan jawaban')
@@ -141,10 +141,10 @@ try {
   const deadline = (views: string[]) => JSON.parse(views.findLast((v) => v.includes('deadline_at'))!).deadline_at
   assert.equal(deadline(b.views), deadline(a.views))
   log('a latecomer gets the same end time as everyone (only the time left)')
-  await pick(b.page, 'Korps Sukarela')
+  await pick(b.page, answerFor(await b.page.locator('main [data-question]').innerText())) // one right answer: 25
   for (let i = 1; i <= 2; i++) {
     await b.page.evaluate(() => window.dispatchEvent(new Event('blur')))
-    await b.page.getByText(`Pelanggaran ${i} dari 3`).waitFor()
+    await b.page.locator('[data-violation-count]', { hasText: `pelanggaran ${i} dari 3` }).waitFor()
     await b.page.click('text=Saya mengerti, lanjutkan')
     await sleep(2100)
   }
@@ -162,7 +162,7 @@ try {
   // reopen counts as violation
   const c = await participant(browser, pre.code, 'Cici', '1003')
   await c.page.reload()
-  await c.page.getByText('Pelanggaran 1 dari 3').waitFor()
+  await c.page.locator('[data-violation-count]', { hasText: 'pelanggaran 1 dari 3' }).waitFor()
   await c.page.getByText('Layar ujian terkunci').or(c.page.getByText('Peringatan')).first().waitFor()
   log('reloading the exam counts as a "reopen" violation and locks the screen')
   // resume link on the join page
@@ -199,8 +199,9 @@ try {
   await inApp.fill('input[name=nim]', '1006')
   await inApp.fill('input[name=prodi]', 'S1 TI')
   await inApp.click('text=Masuk ujian')
-  await inApp.getByText(/Pelanggaran 0\//).waitFor()
+  await inApp.getByText(/Pelanggaran 0 dari/).waitFor()
   assert.equal(await inApp.getByText('Layar ujian terkunci').count(), 0)
+  await inApp.click('text=Daftar soal')
   await inApp.click('text=Kumpulkan jawaban')
   await inApp.getByRole('button', { name: 'Kumpulkan', exact: true }).click()
   await inApp.getByText('Selamat, kamu sudah selesai!').waitFor()
@@ -216,7 +217,7 @@ try {
   assert.match(await row('Cici').innerText(), /Mengerjakan/)
   log('admin results show score, violation count/log and status')
 
-  const csv = await (await adminPage.request.get(`${pre.url}/export`)).text()
+  const csv = await (await adminPage.request.get(`${pre.url}/export?format=csv`)).text()
   assert.match(csv, /Ani,1001,S1 TI,100,0,selesai/)
   assert.match(csv, /"'=HYPERLINK\(""http:\/\/x""\)",1002,S1 TI,25,3/)
   const anon = await (await browser.newContext()).request.get(`${pre.url}/export`)
@@ -243,7 +244,7 @@ try {
   await startExam(adminPage, post.url)
   await p.page.getByText('Soal 1 dari 4').waitFor(STARTED)
   assert.ok(await p.page.getByText('Jawab & lanjut').isDisabled())
-  const firstText = await p.page.locator('main p.font-medium').innerText()
+  const firstText = await p.page.locator('main [data-question]').innerText()
   await pick(p.page, answerFor(firstText))
   await p.page.click('text=Jawab & lanjut')
   await p.page.getByText('Soal 2 dari 4').waitFor()
@@ -251,7 +252,7 @@ try {
   await p.page.getByText('Soal 3 dari 4').waitFor({ timeout: 12_000 })
   log('per-question: unanswered question is skipped when its timer runs out')
   for (const n of [3, 4]) {
-    const text = await p.page.locator('main p.font-medium').innerText()
+    const text = await p.page.locator('main [data-question]').innerText()
     await pick(p.page, answerFor(text))
     await p.page.click(n === 4 ? 'text=Jawab & selesai' : 'text=Jawab & lanjut')
     if (n === 3) await p.page.getByText('Soal 4 dari 4').waitFor()
@@ -305,7 +306,7 @@ try {
   const seen = p.views.length // her score was out once already, before the session reopened
   await p.page.reload()
   await p.page.getByText('Nilai semua peserta muncul serentak dalam').waitFor()
-  assert.match(await p.page.locator('main p.font-mono').innerText(), /^0:[0-2]\d$/)
+  assert.match(await p.page.locator('main p[role=timer]').innerText(), /^0:[0-2]\d$/)
   assert.ok(p.views.slice(seen).every((v) => !v.includes('"score"')))
   log('after closing, a finished participant sees a countdown to the shared release time')
 
@@ -316,8 +317,8 @@ try {
   }
   const [aniAt, budiAt] = await Promise.all([shown(p.page), shown(late.page)])
   assert.ok(Math.abs(aniAt - budiAt) < 4000, `scores appeared ${Math.abs(aniAt - budiAt)} ms apart`)
-  assert.equal(await p.page.locator('main p.text-6xl').innerText(), '75')
-  await p.page.getByText('Kerja bagus!').waitFor()
+  assert.equal(await p.page.locator('[data-score]').innerText(), '75')
+  await p.page.getByText(/Kerja bagus, Ani!/).waitFor()
   assert.ok((await p.page.locator('.confetti').count()) > 0)
   await adminPage.getByText('Nilai sudah terlihat oleh peserta').waitFor({ timeout: 15_000 }) // auto-refresh, no reload
   assert.ok(await adminPage.getByRole('cell', { name: 'Waktu habis' }).isVisible())
@@ -373,13 +374,13 @@ try {
   await adminPage.getByText('Soal (1)').waitFor()
   log('manual edit changes the answer key; delete removes a question')
 
-  await adminPage.click('summary:has-text("Upload CSV")')
+  await adminPage.click('summary:has-text("Upload file soal")')
   await adminPage.setInputFiles('input[type=file]', { name: 'soal.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK\x03\x04 not really a zip') })
   adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.click('text=Upload & ganti semua soal')
-  await adminPage.getByText('Ini file Excel, bukan CSV').waitFor()
+  await adminPage.getByText(/^Upload gagal/).waitFor()
   await adminPage.getByText('Soal (1)').waitFor()
-  log('Excel file is rejected with a clear message and keeps existing questions')
+  log('a broken Excel file is rejected with a message and keeps existing questions')
 
   // --- theme toggle --------------------------------------------------------------
   const theme = () => adminPage.evaluate(() => document.documentElement.dataset.theme ?? 'system')
@@ -387,17 +388,16 @@ try {
   await adminPage.emulateMedia({ colorScheme: 'light' })
   const lightBg = await surface()
   const toggle = adminPage.getByRole('button', { name: /^Tema:/ })
-  await toggle.click() // Otomatis → Terang
-  await toggle.click() // Terang → Gelap
+  await toggle.click() // Terang → Gelap (1 click switches to dark)
   assert.equal(await theme(), 'dark')
   assert.notEqual(await surface(), lightBg)
   await adminPage.reload()
   assert.equal(await theme(), 'dark')
   assert.notEqual(await surface(), lightBg)
-  await adminPage.getByRole('button', { name: /^Tema:/ }).click() // Gelap → Otomatis
-  assert.equal(await theme(), 'system')
+  await adminPage.getByRole('button', { name: /^Tema:/ }).click() // Gelap → Terang
+  assert.equal(await theme(), 'light')
   assert.equal(await surface(), lightBg)
-  log('theme toggle switches to dark, survives reload, and returns to following the device')
+  log('theme toggle switches to dark, survives reload, and returns to light')
 
   // --- session date + delete ----------------------------------------------------
   await adminPage.goto(`${BASE}/admin`)
@@ -405,7 +405,7 @@ try {
   await adminPage.fill('input[name=held_on]', '2026-10-05')
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await adminPage.waitForURL(/\/admin\/sessions\//)
-  await adminPage.getByText(/5 Okt 2026 · Pre-test/).waitFor()
+  await adminPage.getByText('5 Okt 2026', { exact: true }).waitFor()
   adminPage.once('dialog', (d) => d.accept())
   await adminPage.getByRole('button', { name: 'Hapus sesi', exact: true }).click()
   await adminPage.waitForURL(`${BASE}/admin`)

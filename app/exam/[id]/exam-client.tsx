@@ -1,6 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import Link from 'next/link'
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import Brand from '@/app/brand'
+import { Chevron, Lock, Megaphone } from '@/app/icons'
+import Prinsip, { PRINSIP } from '@/app/prinsip'
 import Notice from '@/app/notice'
 import { PendingLabel } from '@/app/pending'
 import ThemeToggle from '@/app/theme-toggle'
@@ -88,6 +92,8 @@ export default function ExamClient({ id }: { id: string }) {
   const [picked, setPicked] = useState<{ id: string; choice: number } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [cur, setCur] = useState(0) // total mode: the question on screen
+  const [navOpen, setNavOpen] = useState(false) // total mode: the question list
   const fullscreen = useSyncExternalStore(subscribeFullscreen, isFullscreen, () => true)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const pending = useRef(0)
@@ -106,16 +112,20 @@ export default function ExamClient({ id }: { id: string }) {
 
   const refresh = useCallback(() => call(base).then(apply, onError), [base, apply, onError])
 
+  const lastViolationRef = useRef(0)
   const reportViolation = useCallback(
     (type: string) => {
-      setWarning('Terdeteksi keluar dari layar ujian. Jangan membuka aplikasi lain, overlay, atau asisten.')
+      const now = Date.now()
+      if (now - lastViolationRef.current < 2000) return
+      lastViolationRef.current = now
+      setWarning('Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten.')
       call(`${base}/violation`, { type }).then(
         (v) => {
           apply(v)
           if (v.status === 'active') {
             setWarning((prev) =>
               prev
-                ? `Pelanggaran ${v.violation_count} dari ${v.max_violations}. Jangan keluar dari layar ujian. ` +
+                ? `Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. ` +
                   `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
                 : '',
             )
@@ -220,67 +230,134 @@ export default function ExamClient({ id }: { id: string }) {
     })
   }
 
-  const current = view.timer_mode === 'per_question' ? view.questions[0] : undefined
+  const perQuestion = view.timer_mode === 'per_question'
+  const current = perQuestion ? view.questions[0] : undefined
   const pickedChoice = current && picked?.id === current.id ? picked.choice : null
   const answered = Object.keys(view.answers).length
   const locked = warning !== '' || !fullscreen
+  const index = Math.min(cur, Math.max(0, view.questions.length - 1))
+  const shown = perQuestion ? current : view.questions[index]
+  const isLast = index === view.total - 1
 
   return (
-    <div className="no-select min-h-dvh">
+    <div className="no-select flex min-h-dvh flex-col">
       <Watermark text={`${view.name} · ${view.nim}`} />
 
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate font-bold">{view.title}</p>
-            <p className={`text-xs ${view.violation_count ? 'font-semibold text-danger' : 'text-muted'}`}>
-              Pelanggaran {view.violation_count}/{view.max_violations}
-            </p>
+      <header className="sticky top-0 z-30 border-t-[5px] border-t-band bg-surface/95 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl flex-col gap-3 px-4 pt-3 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-extrabold">{view.title}</p>
+              <p className={`flex items-center gap-1.5 text-[0.8rem] ${view.violation_count ? 'font-semibold text-danger' : 'text-muted'}`}>
+                <Megaphone size={14} />
+                Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> dari {view.max_violations}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <ThemeToggle compact />
+              <div className="flex flex-col items-end">
+                <Clock deadline={deadline} offset={offset} />
+                {perQuestion && <span className="mt-0.5 text-[0.7rem] text-muted">waktu soal ini</span>}
+              </div>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <ThemeToggle compact />
-            <Clock deadline={deadline} offset={offset} />
+          {/* One segment per question: done (per question) or answered (total); the current one in red. */}
+          <div aria-hidden className="flex gap-[3px]">
+            {Array.from({ length: view.total }, (_, i) => {
+              const done = perQuestion ? i < view.current_index : view.questions[i] ? view.questions[i].id in view.answers : false
+              const now = perQuestion ? i === view.current_index : i === index
+              return <span key={i} className={`h-[5px] min-w-0 flex-1 rounded-full transition-colors ${now ? 'bg-primary' : done ? 'bg-navy' : 'bg-line'}`} />
+            })}
           </div>
+          {!perQuestion && (
+            <>
+              <button
+                type="button"
+                onClick={() => setNavOpen((o) => !o)}
+                aria-expanded={navOpen}
+                className="flex h-11 items-center justify-between rounded-[10px] border-[1.5px] border-line bg-page px-3.5 text-sm font-bold"
+              >
+                Daftar soal
+                <span className="flex items-center gap-2 font-semibold text-muted">
+                  {answered} dari {view.total} terjawab
+                  <Chevron dir="down" className={`transition-transform ${navOpen ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+              {navOpen && (
+                <div className="space-y-3 pb-1">
+                  <div className="grid grid-cols-5 gap-2">
+                    {view.questions.map((q, i) => {
+                      const done = q.id in view.answers
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => {
+                            setCur(i)
+                            setNavOpen(false)
+                          }}
+                          aria-label={`Soal ${i + 1}, ${done ? 'terjawab' : 'belum dijawab'}`}
+                          aria-current={i === index ? 'step' : undefined}
+                          className={`h-11 rounded-[10px] border-2 font-extrabold ${done ? 'border-navy bg-navy text-on-navy' : 'border-line-strong bg-surface'} ${i === index ? 'border-primary!' : ''}`}
+                        >
+                          {i + 1}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex gap-3.5 text-xs text-muted">
+                      <span className="flex items-center gap-1.5"><span className="size-3 rounded-[3px] bg-navy" />Terjawab</span>
+                      <span className="flex items-center gap-1.5"><span className="size-3 rounded-[3px] border-[1.5px] border-line-strong" />Belum</span>
+                    </div>
+                    <button type="button" onClick={() => { setNavOpen(false); setConfirming(true) }} className="btn btn-secondary min-h-10 px-3 text-sm">
+                      Kumpulkan jawaban
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
-        {/* progress: questions done (per question) or answered (total) */}
-        <div className="h-1 bg-subtle">
-          <div
-            className="h-full bg-primary transition-[width] duration-300"
-            style={{ width: `${(100 * (view.timer_mode === 'per_question' ? view.current_index : answered)) / Math.max(1, view.total)}%` }}
-          />
-        </div>
+        {perQuestion && <QuestionTimer deadline={deadline} offset={offset} seconds={view.per_question_sec} />}
+        <div className="border-b border-line" />
       </header>
 
       {notice && <p className="bg-warn-soft px-4 py-2 text-center text-sm">{notice}</p>}
 
-      <main className="mx-auto max-w-2xl space-y-6 p-4 pb-10">
-        {view.timer_mode === 'per_question' ? (
-          current && (
-            <section className="space-y-4">
-              <p className="text-sm font-semibold text-muted">
-                Soal {view.current_index + 1} dari {view.total}
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5 pb-5">
+        {shown && (
+          <section className="flex flex-1 flex-col gap-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-sm text-muted">
+                Soal <b className="display text-xl text-fg">{(perQuestion ? view.current_index : index) + 1}</b> dari {view.total}
               </p>
-              <QuestionCard q={current} selected={pickedChoice} onPick={(choice) => setPicked({ id: current.id, choice })} />
+              {perQuestion ? (
+                <p className="flex items-center gap-1.5 text-[0.8rem] text-muted">
+                  <Lock size={13} />
+                  Tidak bisa kembali
+                </p>
+              ) : (
+                <p className="text-[0.8rem] text-muted">Jawaban bisa diubah sampai dikumpulkan</p>
+              )}
+            </div>
+            <QuestionCard
+              q={shown}
+              selected={perQuestion ? pickedChoice : (view.answers[shown.id] ?? null)}
+              onPick={(choice) => (perQuestion ? setPicked({ id: shown.id, choice }) : answerTotal(shown.id, choice))}
+            />
+
+            {perQuestion ? (
               <button
                 disabled={pickedChoice === null || busy}
-                onClick={() => pickedChoice !== null && answerCurrent(current.id, pickedChoice)}
+                onClick={() => current && pickedChoice !== null && answerCurrent(current.id, pickedChoice)}
                 aria-busy={busy}
-                className="btn btn-primary w-full"
+                className="btn btn-primary mt-auto h-14 w-full text-base"
               >
                 <PendingLabel pending={busy}>{view.current_index + 1 === view.total ? 'Jawab & selesai' : 'Jawab & lanjut'}</PendingLabel>
               </button>
-            </section>
-          )
-        ) : (
-          <>
-            {view.questions.map((q, i) => (
-              <section key={q.id} className="space-y-2">
-                <p className="text-sm font-semibold text-muted">Soal {i + 1}</p>
-                <QuestionCard q={q} selected={view.answers[q.id] ?? null} onPick={(choice) => answerTotal(q.id, choice)} />
-              </section>
-            ))}
-            {confirming ? (
-              <div className="card border-danger-line p-4">
+            ) : confirming ? (
+              <div className="card mt-auto border-danger-line p-4">
                 <p>
                   {answered} dari {view.total} soal terjawab. Kumpulkan sekarang? Jawaban tidak bisa diubah lagi.
                 </p>
@@ -294,33 +371,61 @@ export default function ExamClient({ id }: { id: string }) {
                 </div>
               </div>
             ) : (
-              <button onClick={() => setConfirming(true)} className="btn btn-primary w-full">
-                Kumpulkan jawaban
-              </button>
+              <div className="mt-auto grid grid-cols-2 gap-2.5">
+                <button type="button" disabled={index === 0} onClick={() => setCur(index - 1)} className="btn btn-secondary h-14 text-base">
+                  <Chevron dir="left" />
+                  Sebelumnya
+                </button>
+                {isLast ? (
+                  <button type="button" onClick={() => setConfirming(true)} className="btn btn-primary h-14 text-base">
+                    Kumpulkan jawaban
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setCur(index + 1)} className="btn btn-navy h-14 text-base">
+                    Berikutnya
+                    <Chevron dir="right" />
+                  </button>
+                )}
+              </div>
             )}
-          </>
+          </section>
         )}
       </main>
 
       {locked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 p-6 text-center text-white">
-          <div className="max-w-sm space-y-4">
-            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-red-600/20 text-red-400">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
-              </svg>
+        <div role="alertdialog" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1527]/97 p-7 text-[#eef2f8]">
+          <div className="flex w-full max-w-sm flex-col gap-6 text-center">
+            <span className="mx-auto flex size-28 items-center justify-center rounded-full bg-[#c8102e] shadow-[0_0_0_12px_rgb(200_16_46/0.22),0_0_0_26px_rgb(200_16_46/0.1)]">
+              <Megaphone size={56} />
             </span>
-            <p className="text-lg font-bold">{warning ? 'Peringatan' : 'Layar ujian terkunci'}</p>
-            <p>{warning || 'Ketuk tombol di bawah untuk kembali ke layar penuh dan melanjutkan ujian.'}</p>
+            <div className="space-y-3">
+              {warning && (
+                <p data-violation-count className="font-bold text-[#ff7482]">
+                  {view.violation_count ? `Peringatan: pelanggaran ${view.violation_count} dari ${view.max_violations}` : 'Peringatan'}
+                </p>
+              )}
+              <h2 id="lock-title" className="display text-[1.85rem] text-balance">
+                {warning ? 'Kamu keluar dari layar ujian' : 'Layar ujian terkunci'}
+              </h2>
+              <p className="text-[#c9d3e3]">{warning || 'Ketuk tombol di bawah untuk kembali ke layar penuh dan melanjutkan ujian.'}</p>
+            </div>
+            {view.violation_count > 0 && (
+              <div aria-hidden className="flex justify-center gap-2">
+                {Array.from({ length: view.max_violations }, (_, i) => (
+                  <span key={i} className={`h-2 w-12 rounded ${i < view.violation_count ? 'bg-[#ff5a6a]' : 'bg-[#2a3d63]'}`} />
+                ))}
+              </div>
+            )}
             <button
               onClick={() => {
                 enterFullscreen()
                 setWarning('')
               }}
-              className="btn w-full bg-white text-slate-900 hover:bg-slate-100"
+              className="btn h-14 w-full bg-white text-base text-[#0f1a2e] hover:bg-[#eef2f8]"
             >
               Saya mengerti, lanjutkan
             </button>
+            <p className="-mt-3 text-sm text-[#9aa8c1]">Waktu ujian tetap berjalan.</p>
           </div>
         </div>
       )}
@@ -328,7 +433,7 @@ export default function ExamClient({ id }: { id: string }) {
   )
 }
 
-const cheer = (score: number) => (score >= 80 ? 'Luar biasa!' : score >= 60 ? 'Kerja bagus!' : 'Terima kasih sudah berjuang!')
+const cheer = (score: number) => (score >= 80 ? 'Luar biasa' : score >= 60 ? 'Kerja bagus' : 'Terima kasih sudah berjuang')
 
 // Ticks every 250 ms. Only the small clock components use it, so the question list doesn't
 // re-render four times a second.
@@ -344,9 +449,19 @@ function useNow() {
 function Clock({ deadline, offset }: Readonly<{ deadline: number; offset: number }>) {
   const remaining = Math.max(0, deadline - (useNow() + offset))
   return (
-    <p role="timer" className={`rounded-lg px-2.5 py-1 font-mono text-lg font-bold tabular-nums ${remaining < 10_000 ? 'bg-danger-soft text-danger' : 'bg-subtle'}`}>
+    <p role="timer" className={`display rounded-[10px] px-3 py-1 text-2xl tabular-nums ${remaining < 10_000 ? 'bg-danger-soft text-danger' : 'bg-subtle'}`}>
       {clock(remaining)}
     </p>
+  )
+}
+
+// Per-question mode: a bar under the header that shortens as this question's time runs out.
+function QuestionTimer({ deadline, offset, seconds }: Readonly<{ deadline: number; offset: number; seconds: number }>) {
+  const left = Math.max(0, deadline - (useNow() + offset))
+  return (
+    <div aria-hidden className="h-1 bg-line">
+      <div className="h-full bg-primary transition-[width] duration-300 ease-linear" style={{ width: `${Math.min(100, (100 * left) / (seconds * 1000))}%` }} />
+    </div>
   )
 }
 
@@ -355,7 +470,7 @@ function ReleaseCountdown({ at, offset }: Readonly<{ at: number; offset: number 
   const left = Math.max(0, at - (useNow() + offset))
   return (
     <>
-      <p role="timer" className="my-2 font-mono text-5xl font-bold tabular-nums text-primary">
+      <p role="timer" className="display my-2 text-6xl tabular-nums text-primary">
         {clock(left)}
       </p>
       <p className="text-sm text-muted">{left ? 'Menunggu peserta lain menyelesaikan ujian. Biarkan halaman ini terbuka.' : 'Mengambil nilai…'}</p>
@@ -363,27 +478,83 @@ function ReleaseCountdown({ at, offset }: Readonly<{ at: number; offset: number 
   )
 }
 
+// Lobby: the participant's card, so they can check their details while waiting for the start.
 function Waiting({ view, offset }: Readonly<{ view: ExamView; offset: number }>) {
   const left = Math.max(0, (view.starts_at ?? 0) - (useNow() + offset))
   return (
-    <Notice title={view.title} body={`${view.name} · ${view.nim}`}>
-      {view.starts_at === null ? (
-        <p className="mt-2 text-secondary">Kamu sudah masuk. Tunggu panitia memulai ujian — soal muncul otomatis di sini. Biarkan halaman ini terbuka.</p>
-      ) : (
-        <>
-          <p className="mt-2 text-secondary">Ujian dimulai dalam</p>
-          <p role="timer" className="font-mono text-5xl font-bold tabular-nums text-primary">
-            {clock(left)}
-          </p>
-        </>
-      )}
-    </Notice>
+    <div className="flex min-h-dvh flex-col">
+      <header className="bg-band text-on-band">
+        <div className="mx-auto flex max-w-md flex-col gap-4 px-5 pt-5 pb-28">
+          <div className="flex items-center justify-between gap-3">
+            <Brand onBand subtitle={null} />
+            <span className="text-sm text-on-band/85">Lobi ujian</span>
+          </div>
+          <Prinsip />
+        </div>
+      </header>
+      <main className="mx-auto -mt-20 flex w-full max-w-md flex-1 flex-col items-center gap-6 px-6 pb-7">
+        <article aria-label="Kartu peserta" className="w-full overflow-hidden rounded-[18px] bg-surface shadow-[0_2px_4px_rgb(15_26_46/0.08),0_18px_40px_-16px_rgb(15_26_46/0.35)]">
+          <div className="flex flex-col items-center gap-3 bg-[#13294b] px-5 pt-4 pb-3.5 text-white">
+            <span aria-hidden className="h-2.5 w-14 rounded-md bg-page" />
+            <div className="flex w-full items-center justify-between text-sm">
+              <span className="display text-sm">Kartu peserta</span>
+              <span className="opacity-80">{view.kind === 'pre' ? 'Pre-test' : 'Post-test'}</span>
+            </div>
+          </div>
+          <div className="space-y-4 p-5">
+            <div>
+              <p className="display text-[1.75rem]">{view.name}</p>
+              {view.prodi && <p className="mt-1.5 text-muted">{view.prodi}</p>}
+            </div>
+            <dl>
+              <dt className="text-xs text-muted">NIM</dt>
+              <dd className="font-bold">{view.nim}</dd>
+            </dl>
+            <div className="border-t-2 border-dashed border-line" />
+            <p className="text-sm font-bold">{view.title}</p>
+          </div>
+        </article>
+
+        {view.starts_at === null ? (
+          <>
+            <p role="status" className="flex items-center gap-2.5 rounded-full border border-line bg-surface px-4 py-2.5 text-sm font-bold">
+              <span aria-hidden className="size-2.5 animate-pulse rounded-full bg-ok motion-reduce:animate-none" />
+              Menunggu panitia memulai ujian
+            </p>
+            <p className="max-w-xs text-center text-secondary">Soal muncul otomatis di sini. Biarkan halaman ini terbuka dan layar tetap menyala.</p>
+          </>
+        ) : (
+          <div className="text-center">
+            <p className="text-secondary">Ujian dimulai dalam</p>
+            <p role="timer" className="display text-6xl tabular-nums text-primary">
+              {clock(left)}
+            </p>
+          </div>
+        )}
+
+        <section aria-labelledby="prinsip-title" className="mt-auto w-full space-y-2.5 text-center">
+          <h2 id="prinsip-title" className="text-xs font-bold text-muted">
+            Tujuh Prinsip Dasar Gerakan
+          </h2>
+          <ol className="flex flex-wrap justify-center gap-x-3.5 gap-y-1.5 text-sm font-semibold text-secondary">
+            {PRINSIP.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ol>
+        </section>
+      </main>
+    </div>
   )
+}
+
+const duration = (ms: number) => {
+  const s = Math.round(ms / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }>) {
   const celebrate = view.submit_reason !== 'violation'
-  const title = celebrate ? 'Selamat, kamu sudah selesai! 🎉' : 'Ujian dikumpulkan otomatis'
+  const title = celebrate ? 'Selamat, kamu sudah selesai!' : 'Ujian dikumpulkan otomatis'
   if (view.score === undefined && view.results_at === null) {
     return (
       <Notice
@@ -402,23 +573,133 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
       </Notice>
     )
   }
+  const firstName = view.name.trim().split(/\s+/)[0]
+  const pre = view.pre_score
   return (
-    <Notice title={view.title} body={`${view.name} · ${view.nim}`}>
+    <div className="flex min-h-dvh flex-col">
       {celebrate && <Confetti key="score" /> /* new key: replay the burst when the score arrives */}
-      <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-muted">Nilaimu</p>
-      <p className="pop-in mx-auto flex size-32 items-center justify-center rounded-full bg-primary-soft text-6xl font-extrabold text-primary tabular-nums ring-8 ring-primary-soft/50">
-        {view.score}
-      </p>
-      {celebrate && <p className="pop-in mt-2 text-lg font-bold [animation-delay:300ms]">🎉 {cheer(view.score)}</p>}
-    </Notice>
+      <header className="bg-band text-on-band">
+        <div className="mx-auto flex max-w-md flex-col gap-5 px-5 pt-5 pb-5">
+          <div className="flex items-center justify-between gap-3">
+            <Brand onBand subtitle={null} />
+            <ThemeToggle compact onBand />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm text-on-band/90">{view.title}</p>
+            <h1 className="display text-2xl">{celebrate ? `${cheer(view.score)}, ${firstName}!` : 'Ujian dikumpulkan otomatis'}</h1>
+          </div>
+          <div className="flex items-end gap-2.5">
+            <p data-score className="pop-in display text-[7rem] leading-[0.85] tracking-[-0.04em]" aria-label={`Nilaimu ${view.score} dari 100`}>
+              {view.score}
+            </p>
+            <div className="flex flex-col gap-0.5 pb-1.5">
+              <span className="text-lg font-bold text-on-band/85">/100</span>
+              <span className="text-sm text-on-band/85">Nilaimu</span>
+            </div>
+          </div>
+          <Prinsip />
+        </div>
+      </header>
+
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3 px-4.5 pt-5 pb-6">
+        {view.kind === 'pre' ? (
+          <section aria-labelledby="awal-title" className="card space-y-3 p-4">
+            <h2 id="awal-title" className="display text-[0.95rem]">
+              Ini titik awalmu
+            </h2>
+            <Bars rows={[{ label: 'Pre-test', value: view.score, tone: 'bg-navy' }, { label: 'Post-test', value: null }]} />
+            <p className="text-sm text-muted">Kenaikan nilaimu muncul di sini setelah post-test materi ini, selama NIM yang dipakai sama.</p>
+          </section>
+        ) : pre !== undefined && pre !== null ? (
+          <section aria-labelledby="banding-title" className="card space-y-3 p-4">
+            <div className="flex items-baseline justify-between gap-2.5">
+              <h2 id="banding-title" className="display text-[0.95rem]">
+                Dibanding pre-test
+              </h2>
+              <Delta value={view.score - pre} />
+            </div>
+            <Bars
+              rows={[
+                { label: 'Pre-test', value: pre, tone: 'bg-navy' },
+                { label: 'Post-test', value: view.score, tone: 'bg-primary' },
+              ]}
+            />
+          </section>
+        ) : pre === null ? (
+          <section className="flex gap-3 rounded-2xl border-[1.5px] border-dashed border-line-strong bg-surface p-4 text-sm text-secondary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="mt-px shrink-0 text-muted">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v5M12 16h.01" />
+            </svg>
+            <p>
+              Nilai pre-test untuk NIM <b className="text-fg">{view.nim}</b> tidak ditemukan di materi ini, jadi perbandingan tidak ditampilkan. Kalau kamu ikut
+              pre-test, tanyakan panitia apakah NIM-nya tercatat berbeda.
+            </p>
+          </section>
+        ) : null}
+
+        <dl className="grid grid-cols-3 gap-2.5">
+          <Fact label="Jawaban benar">
+            {view.correct ?? '–'}
+            <span className="text-sm text-muted">/{view.total}</span>
+          </Fact>
+          <Fact label="Waktu dipakai">{view.time_used_ms !== undefined ? duration(view.time_used_ms) : '–'}</Fact>
+          <Fact label="Pelanggaran">{view.violation_count}</Fact>
+        </dl>
+
+        <div className="flex justify-between gap-3 px-1 pt-1 text-sm text-muted">
+          <span className="min-w-0 truncate">{view.name}</span>
+          <span className="shrink-0">NIM {view.nim}</span>
+        </div>
+
+        <Link href="/" className="btn btn-secondary mt-auto h-13 w-full text-base">
+          Kembali ke beranda
+        </Link>
+      </main>
+    </div>
+  )
+}
+
+function Fact({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
+  return (
+    <div className="flex flex-col-reverse rounded-[14px] border border-line bg-surface p-3">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="display text-[1.4rem]">{children}</dd>
+    </div>
+  )
+}
+
+function Delta({ value }: Readonly<{ value: number }>) {
+  const tone = value > 0 ? 'bg-ok-soft text-ok' : value < 0 ? 'bg-danger-soft text-danger' : 'bg-subtle text-secondary'
+  const text = value > 0 ? `naik ${value} poin` : value < 0 ? `turun ${-value} poin` : 'sama'
+  return <span className={`rounded-full px-2.5 py-1 text-sm font-extrabold ${tone}`}>{text}</span>
+}
+
+function Bars({ rows }: Readonly<{ rows: { label: string; value: number | null; tone?: string }[] }>) {
+  return (
+    <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_2rem] items-center gap-x-2.5 gap-y-2 text-[0.8rem]">
+      {rows.map((r) => (
+        <Fragment key={r.label}>
+          <span className="text-muted">{r.label}</span>
+          {r.value === null ? (
+            <span aria-hidden className="h-2.5 rounded-full border-[1.5px] border-dashed border-line-strong" />
+          ) : (
+            <span aria-hidden className="h-2.5 rounded-full bg-track">
+              <span className={`block h-full rounded-full ${r.tone}`} style={{ width: `${r.value}%` }} />
+            </span>
+          )}
+          <b className={`text-right ${r.value === null ? 'text-muted' : ''}`}>{r.value ?? '?'}</b>
+        </Fragment>
+      ))}
+    </div>
   )
 }
 
 function QuestionCard({ q, selected, onPick }: { q: PublicQuestion; selected: number | null; onPick: (choice: number) => void }) {
   return (
-    <div className="card p-4 sm:p-5">
-      <p className="mb-4 whitespace-pre-line font-medium leading-relaxed">{q.text}</p>
-      <div className="grid gap-2.5">
+    <div className="space-y-4">
+      <p data-question className="whitespace-pre-line text-[1.2rem] leading-snug font-semibold">{q.text}</p>
+      <div role="group" aria-label="Pilihan jawaban" className="grid gap-2.5">
         {q.options.map((option, i) => {
           const on = selected === i
           return (
@@ -427,17 +708,13 @@ function QuestionCard({ q, selected, onPick }: { q: PublicQuestion; selected: nu
               type="button"
               aria-pressed={on}
               onClick={() => onPick(i)}
-              className={`flex min-h-12 min-w-0 items-center gap-3 rounded-xl border-2 p-3 text-left transition-colors ${
-                on ? 'border-primary bg-primary-soft font-semibold' : 'border-line hover:border-line-strong'
+              className={`flex min-h-14 min-w-0 items-center gap-3.5 rounded-[14px] border-2 px-3.5 py-2.5 text-left transition-colors ${
+                on ? 'border-navy bg-navy-soft font-bold' : 'border-line bg-surface hover:border-line-strong'
               }`}
             >
-              {q.type === 'mc' && (
-                <span
-                  className={`flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${on ? 'bg-primary text-on-primary' : 'bg-subtle'}`}
-                >
-                  {String.fromCodePoint(65 + i)}.
-                </span>
-              )}
+              <span className={`flex size-8 shrink-0 items-center justify-center rounded-[9px] text-sm font-extrabold ${on ? 'bg-navy text-on-navy' : 'bg-subtle text-secondary'}`}>
+                {q.type === 'mc' ? String.fromCodePoint(65 + i) : i === 0 ? 'B' : 'S'}
+              </span>
               <span className="min-w-0">{option}</span>
             </button>
           )

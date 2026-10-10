@@ -39,11 +39,13 @@ export default function ParticipantsTable({
   attempts,
   violations,
   started,
+  perQuestion,
 }: Readonly<{
   sessionId: string
   attempts: Attempt[]
   violations: Violation[]
   started: boolean
+  perQuestion: boolean
 }>) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterTab>('all')
@@ -81,6 +83,9 @@ export default function ParticipantsTable({
       return a.name.toLowerCase().includes(q) || a.nim.toLowerCase().includes(q) || (a.prodi && a.prodi.toLowerCase().includes(q))
     })
   }, [attempts, search, filter])
+
+  // Questions done (per question: passed; total: answered).
+  const progress = (a: Attempt) => (a.submitted_at ? a.question_order.length : perQuestion ? a.current_index : Object.keys(a.answers).length)
 
   const copyExamLink = (attemptId: string) => {
     const url = `${window.location.origin}/exam/${attemptId}`
@@ -121,28 +126,28 @@ export default function ParticipantsTable({
           <button
             type="button"
             onClick={() => setFilter('all')}
-            className={`rounded-lg px-2.5 py-1.5 font-medium transition-colors ${filter === 'all' ? 'bg-primary text-white' : 'bg-subtle text-secondary hover:text-fg'}`}
+            className={`rounded-lg px-3 py-2 font-bold transition-colors ${filter === 'all' ? 'bg-navy text-on-navy' : 'bg-subtle text-secondary hover:text-fg'}`}
           >
             Semua ({counts.all})
           </button>
           <button
             type="button"
             onClick={() => setFilter('working')}
-            className={`rounded-lg px-2.5 py-1.5 font-medium transition-colors ${filter === 'working' ? 'bg-primary text-white' : 'bg-subtle text-secondary hover:text-fg'}`}
+            className={`rounded-lg px-3 py-2 font-bold transition-colors ${filter === 'working' ? 'bg-navy text-on-navy' : 'bg-subtle text-secondary hover:text-fg'}`}
           >
             Mengerjakan ({counts.working})
           </button>
           <button
             type="button"
             onClick={() => setFilter('finished')}
-            className={`rounded-lg px-2.5 py-1.5 font-medium transition-colors ${filter === 'finished' ? 'bg-primary text-white' : 'bg-subtle text-secondary hover:text-fg'}`}
+            className={`rounded-lg px-3 py-2 font-bold transition-colors ${filter === 'finished' ? 'bg-navy text-on-navy' : 'bg-subtle text-secondary hover:text-fg'}`}
           >
             Selesai ({counts.finished})
           </button>
           <button
             type="button"
             onClick={() => setFilter('violations')}
-            className={`rounded-lg px-2.5 py-1.5 font-medium transition-colors ${filter === 'violations' ? 'bg-primary text-white' : 'bg-subtle text-secondary hover:text-fg'}`}
+            className={`rounded-lg px-3 py-2 font-bold transition-colors ${filter === 'violations' ? 'bg-navy text-on-navy' : 'bg-subtle text-secondary hover:text-fg'}`}
           >
             Ada Pelanggaran ({counts.violations})
           </button>
@@ -151,7 +156,7 @@ export default function ParticipantsTable({
 
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-muted">
+          <thead className="bg-subtle text-left text-xs text-muted">
             <tr>
               <th className="p-3">Nama</th>
               <th className="p-3">NIM</th>
@@ -159,6 +164,7 @@ export default function ParticipantsTable({
               <th className="p-3">Nilai</th>
               <th className="p-3">Pelanggaran</th>
               <th className="p-3">Status</th>
+              <th className="p-3">Progres</th>
               <th className="p-3 text-right">Aksi</th>
             </tr>
           </thead>
@@ -190,6 +196,9 @@ export default function ParticipantsTable({
                     {a.submit_reason ? (STATUS[a.submit_reason] ?? a.submit_reason) : started ? 'Mengerjakan' : 'Menunggu'}
                   </span>
                 </td>
+                <td className="p-3">
+                  <Progress done={progress(a)} total={a.question_order.length} />
+                </td>
                 <td className="p-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button
@@ -214,7 +223,7 @@ export default function ParticipantsTable({
             ))}
             {!filtered.length && (
               <tr>
-                <td colSpan={7} className="p-4 text-center text-muted">
+                <td colSpan={8} className="p-4 text-center text-muted">
                   {attempts.length === 0 ? 'Belum ada peserta.' : 'Tidak ada peserta yang cocok dengan pencarian / filter.'}
                 </td>
               </tr>
@@ -222,6 +231,21 @@ export default function ParticipantsTable({
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+function Progress({ done, total }: Readonly<{ done: number; total: number }>) {
+  return (
+    <div className="flex min-w-36 items-center gap-2" title={`${done} dari ${total} soal`}>
+      <div aria-hidden className="flex flex-1 gap-0.5">
+        {Array.from({ length: total }, (_, i) => (
+          <span key={i} className={`h-1.5 min-w-0 flex-1 rounded-sm ${i < done ? 'bg-navy' : 'bg-line'}`} />
+        ))}
+      </div>
+      <span className="w-10 text-right text-xs text-muted">
+        {Math.min(done, total)}/{total}
+      </span>
     </div>
   )
 }

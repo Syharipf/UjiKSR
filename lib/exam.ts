@@ -17,6 +17,7 @@ export interface Session {
   is_open: boolean
   closes_at: string | null // set by "Mulai ujian": the exam's end, it takes no new participants after it (null = until closed by hand)
   started_at: string | null // set by "Mulai ujian": everyone's clock starts here (null = lobby, participants wait)
+  pre_session_id?: string | null // post-test only: the pre-test it is compared with (by NIM) on the participant's score page
 }
 
 // Open = opened by the committee and the exam not yet over.
@@ -80,9 +81,12 @@ export interface ExamView {
   status: 'waiting' | 'active' | 'submitted'
   submit_reason: SubmitReason | null
   title: string
+  kind: 'pre' | 'post'
   name: string
   nim: string
+  prodi: string
   timer_mode: TimerMode
+  per_question_sec: number
   max_violations: number
   violation_count: number
   server_now: number
@@ -94,6 +98,12 @@ export interface ExamView {
   questions: PublicQuestion[]
   answers: Record<string, number> // question id → display index (total mode only)
   score?: number // only present once results are released (see resultsStatus in attempts.ts)
+  // Also only once released:
+  correct?: number // questions answered correctly, out of `total`
+  time_used_ms?: number // from the attempt's start to its submission
+  // Post-test paired with a pre-test: that pre-test's score for the same NIM (null = none found).
+  // Absent when there is nothing to compare with (a pre-test, or a post-test without a pair).
+  pre_score?: number | null
   results_at: number | null // submitted, not yet released: when scores appear for everyone (null = session still open)
 }
 
@@ -159,11 +169,14 @@ export function settle(a: Attempt, s: Session, now: Date) {
   return { current_index, question_started_at: new Date(started + skips * per).toISOString(), finish }
 }
 
+export function countCorrect(a: Pick<Attempt, 'question_order' | 'answers'>, questions: Record<string, Question>) {
+  return a.question_order.filter((id) => a.answers[id] !== undefined && a.answers[id] === questions[id]?.answer_index).length
+}
+
 export function grade(a: Pick<Attempt, 'question_order' | 'answers'>, questions: Record<string, Question>) {
   const n = a.question_order.length
   if (n === 0) return 0
-  const correct = a.question_order.filter((id) => a.answers[id] !== undefined && a.answers[id] === questions[id]?.answer_index).length
-  return Math.round((correct / n) * 100)
+  return Math.round((countCorrect(a, questions) / n) * 100)
 }
 
 export function originalIndex(a: Attempt, questionId: string, displayIndex: number) {
@@ -185,7 +198,14 @@ export function planAnswer(a: Attempt, s: Session, questionId: string) {
 }
 
 // `results`: whether this participant may see their own score yet (session over), and when that happens.
-export function buildView(a: Attempt, s: Session, questions: Record<string, Question>, now: Date, results = NOT_RELEASED): ExamView {
+export function buildView(
+  a: Attempt,
+  s: Session,
+  questions: Record<string, Question>,
+  now: Date,
+  results = NOT_RELEASED,
+  preScore?: number | null,
+): ExamView {
   const submitted = a.submitted_at !== null
   const waiting = !submitted && !hasStarted(s, now.getTime())
   const perQuestion = s.timer_mode === 'per_question'
@@ -198,9 +218,12 @@ export function buildView(a: Attempt, s: Session, questions: Record<string, Ques
     status: submitted ? 'submitted' : waiting ? 'waiting' : 'active',
     submit_reason: a.submit_reason,
     title: s.title,
+    kind: s.kind,
     name: a.name,
     nim: a.nim,
+    prodi: a.prodi,
     timer_mode: s.timer_mode,
+    per_question_sec: s.per_question_sec,
     max_violations: s.max_violations,
     violation_count: a.violation_count,
     server_now: now.getTime(),
@@ -215,6 +238,13 @@ export function buildView(a: Attempt, s: Session, questions: Record<string, Ques
     }),
     answers,
     results_at: submitted && !results.released ? results.at : null,
-    ...(submitted && results.released && a.score !== null ? { score: a.score } : {}),
+    ...(submitted && results.released && a.score !== null
+      ? {
+          score: a.score,
+          correct: countCorrect(a, questions),
+          time_used_ms: Math.max(0, Date.parse(a.submitted_at!) - Date.parse(a.started_at)),
+          ...(preScore !== undefined ? { pre_score: preScore } : {}),
+        }
+      : {}),
   }
 }
