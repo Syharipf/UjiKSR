@@ -10,7 +10,9 @@
     "lint": "eslint",
     "test": "bun test",
     "e2e": "bash e2e/run.sh",
-    "screenshots": "bash e2e/run.sh screenshots.ts"
+    "screenshots": "bash e2e/run.sh screenshots.ts",
+    "landing:dev": "cd landing && bun run dev",
+    "landing:build": "cd landing && bun run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
