@@ -6,23 +6,16 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { finalizeExpired, resultsStatus, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { formatDate, hasStarted, isOpen, type Attempt, type Question, type ResultsStatus, type Session } from '@/lib/exam'
-import { deleteQuestion, deleteSession, resetAllAttempts, resetAttempt, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
+import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats } from '@/lib/report'
+import { deleteQuestion, deleteSession, duplicateSession, forceSubmitAll, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
 import LinkPending from '@/app/link-pending'
+import ParticipantsTable from './participants-table'
+import SessionCharts from './session-charts'
 import SubmitButton from '@/app/submit-button'
 import QuestionForm from '../../question-form'
 import SessionForm from '../../session-form'
 import { AutoRefresh, Countdown } from './live'
 
-const STATUS = { manual: 'Selesai', timeout: 'Waktu habis', violation: 'Auto-submit (pelanggaran)' } as const
-const STATUS_STYLE = { manual: 'bg-ok-soft text-ok', timeout: 'bg-subtle text-secondary', violation: 'bg-danger-soft text-danger', working: 'bg-warn-soft', waiting: 'bg-primary-soft text-primary' }
-// A Map, not an object literal: a stored type like '__proto__' must miss, not render Object.prototype.
-const VIOLATION = new Map([
-  ['hidden', 'pindah aplikasi/tab'],
-  ['blur', 'hilang fokus'],
-  ['fullscreen_exit', 'keluar layar penuh'],
-  ['resize', 'layar mengecil (split screen)'],
-  ['reopen', 'membuka ulang ujian'],
-])
 
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -69,8 +62,9 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
   const open = isOpen(session, serverNow)
   const lobby = open && !session.started_at
   const started = hasStarted(session, serverNow)
-  const byAttempt = Map.groupBy(violations, (v) => v.attempt_id)
-
+  const stats = calculateSessionStats(attempts)
+  const accuracy = calculateQuestionAccuracy(questions, attempts)
+  const distribution = calculateScoreDistribution(attempts)
   const h = await headers()
   const link = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}/s/${session.code}`
   const qr = await QRCode.toDataURL(link, { width: 480, margin: 1 })
@@ -81,9 +75,16 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
         <Link href="/admin" className="text-sm font-semibold text-muted hover:text-fg">
           ← Semua sesi <LinkPending />
         </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="min-w-0 text-2xl font-extrabold tracking-tight">{session.title}</h1>
-          <span className={`badge ${open ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>{lobby ? 'Lobi' : open ? 'Berjalan' : 'Ditutup'}</span>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="min-w-0 text-2xl font-extrabold tracking-tight">{session.title}</h1>
+            <span className={`badge ${open ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>{lobby ? 'Lobi' : open ? 'Berjalan' : 'Ditutup'}</span>
+          </div>
+          <form action={duplicateSession.bind(null, id)}>
+            <SubmitButton confirm="Duplikat sesi ini beserta seluruh soalnya?" className="btn btn-secondary text-sm">
+              Duplikat sesi
+            </SubmitButton>
+          </form>
         </div>
         <p className="mt-1 text-sm text-muted">
           {formatDate(session.held_on)} · {session.kind === 'pre' ? 'Pre-test' : 'Post-test'} · kode {session.code}
@@ -148,37 +149,56 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
         <h2 className="text-lg font-bold">Soal ({questions.length})</h2>
         {locked && <p className="text-sm text-muted">Soal terkunci karena sudah ada peserta atau ujian sudah dimulai. Reset semua peserta untuk mengubah soal.</p>}
         <ol className="space-y-2">
-          {questions.map((q, i) => (
-            <li key={q.id} className="rounded-xl border border-line p-4 text-sm">
-              <p className="whitespace-pre-line font-medium">
-                {i + 1}. {q.text}
-              </p>
-              <ul className="mt-1 space-y-0.5">
-                {q.options.map((option, j) => (
-                  <li key={j} className={j === q.answer_index ? 'font-semibold text-ok' : 'text-secondary'}>
-                    {q.type === 'mc' && `${String.fromCodePoint(65 + j)}. `}
-                    {option}
-                    {j === q.answer_index && ' ✓'}
-                  </li>
-                ))}
-              </ul>
-              {!locked && (
-                <div className="mt-2 flex flex-wrap items-start gap-3">
-                  <details className="min-w-0 flex-1">
-                    <summary className="cursor-pointer text-xs underline">Edit</summary>
-                    <div className="mt-2">
-                      <QuestionForm action={saveQuestion.bind(null, id, q.id)} question={q} submitLabel="Simpan soal" />
-                    </div>
-                  </details>
-                  <form action={deleteQuestion.bind(null, id, q.id)}>
-                    <SubmitButton confirm={`Hapus soal ${i + 1}?`} className="text-xs text-danger underline">
-                      Hapus
-                    </SubmitButton>
-                  </form>
+          {questions.map((q, i) => {
+            const stat = accuracy.get(q.id)
+            return (
+              <li key={q.id} className="rounded-xl border border-line p-4 text-sm">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="whitespace-pre-line font-medium min-w-0 flex-1">
+                    {i + 1}. {q.text}
+                  </p>
+                  {stat && stat.percentage !== null && (
+                    <span
+                      className={`badge text-xs shrink-0 ${
+                        stat.percentage >= 70
+                          ? 'bg-ok-soft text-ok'
+                          : stat.percentage >= 40
+                            ? 'bg-warn-soft text-amber-800 dark:text-amber-300'
+                            : 'bg-danger-soft text-danger'
+                      }`}
+                      title={`${stat.correct} dari ${stat.answered} peserta menjawab benar`}
+                    >
+                      Akurasi {stat.percentage}% ({stat.correct}/{stat.answered})
+                    </span>
+                  )}
                 </div>
-              )}
-            </li>
-          ))}
+                <ul className="mt-1 space-y-0.5">
+                  {q.options.map((option, j) => (
+                    <li key={j} className={j === q.answer_index ? 'font-semibold text-ok' : 'text-secondary'}>
+                      {q.type === 'mc' && `${String.fromCodePoint(65 + j)}. `}
+                      {option}
+                      {j === q.answer_index && ' ✓'}
+                    </li>
+                  ))}
+                </ul>
+                {!locked && (
+                  <div className="mt-2 flex flex-wrap items-start gap-3">
+                    <details className="min-w-0 flex-1">
+                      <summary className="cursor-pointer text-xs underline">Edit</summary>
+                       <div className="mt-2">
+                        <QuestionForm action={saveQuestion.bind(null, id, q.id)} question={q} submitLabel="Simpan soal" />
+                      </div>
+                    </details>
+                    <form action={deleteQuestion.bind(null, id, q.id)}>
+                      <SubmitButton confirm={`Hapus soal ${i + 1}?`} className="text-xs text-danger underline">
+                        Hapus
+                      </SubmitButton>
+                    </form>
+                  </div>
+                )}
+              </li>
+            )
+          })}
           {!questions.length && <li className="text-sm text-muted">Belum ada soal. Tambah manual atau upload CSV di bawah.</li>}
         </ol>
 
@@ -192,7 +212,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             </details>
 
             <details className="rounded-xl border border-line p-4">
-              <summary className="cursor-pointer font-semibold">Upload CSV (ganti semua soal)</summary>
+              <summary className="cursor-pointer font-semibold">Upload file soal (Excel / CSV)</summary>
               <form action={uploadQuestions.bind(null, id)} className="mt-3 flex flex-wrap items-center gap-2">
                 {/* No accept filter: Android often labels .csv with other MIME types and greys the file out. */}
                 <input type="file" name="file" required className="min-w-0 text-sm" />
@@ -208,10 +228,13 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                 )}
               </form>
               <p className="mt-2 text-sm text-muted">
-                Kolom CSV: <code>type,question,a,b,c,d,e,answer</code>. type <code>pg</code> (pilihan ganda) atau <code>bs</code> (benar/salah);
-                answer huruf opsi, atau B/S untuk benar/salah. Dari Excel/Google Sheets: Save As / Download → CSV.{' '}
+                Format: <code>type,question,a,b,c,d,e,answer</code>. Mendukung file Excel (.xlsx) dan CSV (.csv). Unduh template:{' '}
+                <a href="/contoh-soal.xlsx" download className="font-semibold underline">
+                  Excel (.xlsx)
+                </a>{' '}
+                ·{' '}
                 <a href="/contoh-soal.csv" download className="underline">
-                  Unduh contoh
+                  CSV (.csv)
                 </a>
               </p>
             </details>
@@ -235,11 +258,57 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
         </form>
       </section>
 
+      {attempts.length > 0 && (
+        <div className="space-y-4">
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="card p-3 text-center">
+              <p className="text-xs text-muted">Rata-rata Nilai</p>
+              <p className="text-2xl font-extrabold text-primary">{stats.avgScore !== null ? stats.avgScore : '–'}</p>
+            </div>
+            <div className="card p-3 text-center">
+              <p className="text-xs text-muted">Nilai Tertinggi</p>
+              <p className="text-2xl font-extrabold text-ok">{stats.maxScore !== null ? stats.maxScore : '–'}</p>
+            </div>
+            <div className="card p-3 text-center">
+              <p className="text-xs text-muted">Nilai Terendah</p>
+              <p className="text-2xl font-extrabold text-secondary">{stats.minScore !== null ? stats.minScore : '–'}</p>
+            </div>
+            <div className="card p-3 text-center">
+              <p className="text-xs text-muted">Selesai</p>
+              <p className="text-2xl font-extrabold">{stats.submittedCount}/{stats.totalCount}</p>
+            </div>
+            <div className="card p-3 text-center col-span-2 sm:col-span-1">
+              <p className="text-xs text-muted">Total Pelanggaran</p>
+              <p className={`text-2xl font-extrabold ${stats.totalViolations ? 'text-danger' : 'text-muted'}`}>{stats.totalViolations}</p>
+            </div>
+          </section>
+          <SessionCharts
+            distribution={distribution}
+            totalAttempts={attempts.length}
+            workingCount={working}
+            submittedCount={stats.submittedCount}
+          />
+        </div>
+      )}
+
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Peserta ({attempts.length})</h2>
-          <div className="flex gap-2">
-            <a href={`/admin/sessions/${id}/export`} className="btn btn-secondary text-sm">
+          <div className="flex flex-wrap gap-2">
+            {working > 0 && (
+              <form action={forceSubmitAll.bind(null, id)}>
+                <SubmitButton
+                  confirm={`Paksa kumpulkan ${working} peserta yang masih mengerjakan sekarang? Ujian mereka akan langsung diakhiri.`}
+                  className="btn btn-secondary text-sm text-danger"
+                >
+                  Paksa kumpul ({working})
+                </SubmitButton>
+              </form>
+            )}
+            <a href={`/admin/sessions/${id}/export?format=xlsx`} className="btn btn-secondary text-sm">
+              Export Excel
+            </a>
+            <a href={`/admin/sessions/${id}/export?format=csv`} className="btn btn-secondary text-sm">
               Export CSV
             </a>
             <form action={resetAllAttempts.bind(null, id)}>
@@ -252,66 +321,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             </form>
           </div>
         </div>
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="p-3">Nama</th>
-                <th className="p-3">NIM</th>
-                <th className="p-3">Prodi</th>
-                <th className="p-3">Nilai</th>
-                <th className="p-3">Pelanggaran</th>
-                <th className="p-3">Status</th>
-                <th className="p-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {attempts.map((a) => (
-                <tr key={a.id} className="border-t border-line align-top">
-                  <td className="p-3">{a.name}</td>
-                  <td className="p-3">{a.nim}</td>
-                  <td className="p-3">{a.prodi || '–'}</td>
-                  <td className="p-3">{a.score ?? '–'}</td>
-                  <td className="p-3">
-                    {a.violation_count === 0 ? (
-                      '0'
-                    ) : (
-                      <details>
-                        <summary className="cursor-pointer">{a.violation_count}</summary>
-                        <ul className="mt-1 text-xs text-secondary">
-                          {(byAttempt.get(a.id) ?? []).map((v) => (
-                            <li key={v.id}>
-                              {time(v.created_at)} · {VIOLATION.get(v.type) ?? v.type}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <span className={`badge ${STATUS_STYLE[a.submit_reason ?? (started ? 'working' : 'waiting')]}`}>
-                      {a.submit_reason ? STATUS[a.submit_reason] : started ? 'Mengerjakan' : 'Menunggu'}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <form action={resetAttempt.bind(null, id, a.id)}>
-                      <SubmitButton confirm={`Reset ${a.name}? Jawabannya dihapus dan peserta ini bisa mulai ulang.`} className="text-xs text-danger underline">
-                        Reset
-                      </SubmitButton>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-              {!attempts.length && (
-                <tr>
-                  <td colSpan={7} className="p-3 text-muted">
-                    Belum ada peserta.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ParticipantsTable sessionId={id} attempts={attempts} violations={violations} started={started} />
       </section>
     </main>
   )

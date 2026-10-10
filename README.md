@@ -51,13 +51,14 @@
 
 **Untuk panitia** (`/admin`)
 - Buat sesi pre-test/post-test lengkap dengan tanggal, mode timer, dan batas pelanggaran.
-- Soal lewat form manual atau upload CSV dari Excel/Google Sheets.
+- **Duplikat sesi**: salin seluruh bank soal dan pengaturan dari Pre-test ke Post-test dalam satu klik.
+- Soal lewat form manual atau upload Excel (.xlsx dengan auto-width) / CSV.
+- **Analisis butir soal**: persentase akurasi jawaban benar per nomor soal untuk melihat materi yang sulit.
 - Halaman **Tayangkan QR & kode** untuk share screen atau proyektor: QR dan kode sesi dalam ukuran besar, tanpa daftar soal dan kunci jawaban. Sesi dibuka dengan satu klik dan tutup otomatis setelah durasi ujian.
-- Pantau peserta secara langsung: nilai, status, dan log pelanggaran lengkap dengan jam. Halaman memperbarui diri tiap 10 detik.
+- Pantau peserta secara langsung: ringkasan statistik (rata-rata, tertinggi, terendah), pencarian & filter, salin link pengerjaan, paksa kumpul semua (*force submit*), dan log pelanggaran. Halaman memperbarui diri tiap 3 detik.
 - Hitung mundur sampai nilai tampil di HP peserta.
-- Export hasil ke CSV, reset peserta, hapus sesi.
+- Export hasil ke Excel (.xlsx dengan auto-width) atau CSV, reset peserta, hapus sesi.
 - Bandingkan pre-test vs post-test per peserta (dicocokkan lewat NIM) beserta rata-rata peningkatannya.
-
 <p align="center">
   <img src="docs/img/admin-qr-display.webp" width="700" alt="Halaman Tayangkan QR & kode untuk share screen atau proyektor"><br>
   <sub>Tayangkan QR & kode: aman di-share screen, tanpa kunci jawaban</sub>
@@ -119,9 +120,9 @@ Kebutuhan: [Bun](https://bun.sh) 1.2+, akun [Supabase](https://supabase.com), da
 
 Perubahan skema dicatat di bagian atas `supabase/schema.sql`. Contohnya kolom tanggal sesi (`held_on`) untuk database yang dibuat sebelum fitur itu ada. Jalankan SQL tersebut di Supabase **sebelum** merge ke `master`, karena setiap merge langsung ter-deploy ke production.
 
-## Format soal CSV
+## Format soal (Excel & CSV)
 
-Kolom: `type,question,a,b,c,d,e,answer`. Contoh lengkap ada di [`public/contoh-soal.csv`](public/contoh-soal.csv).
+Kolom: `type,question,a,b,c,d,e,answer`. Template siap pakai tersedia dalam format Excel ([`public/contoh-soal.xlsx`](public/contoh-soal.xlsx)) dengan lebar kolom otomatis (*auto-width*) dan CSV ([`public/contoh-soal.csv`](public/contoh-soal.csv)).
 
 | Kolom | Isi |
 |---|---|
@@ -136,7 +137,7 @@ pg,Apa kepanjangan dari KSR?,Korps Sukarela,Kelompok Siaga Relawan,Komunitas Sos
 bs,Tourniquet adalah pilihan pertama untuk semua jenis perdarahan.,,,,,,S
 ```
 
-Dari Excel atau Google Sheets, pilih **Save As / Download → CSV**. Pemisah koma atau titik koma (Excel versi Indonesia) terdeteksi otomatis. File `.xlsx` ditolak dengan pesan yang jelas.
+Mendukung file Excel (`.xlsx`) langsung serta CSV (`.csv`) dari Excel atau Google Sheets. Pemisah koma atau titik koma pada CSV terdeteksi otomatis. Format `.xls` lama tidak didukung (simpan sebagai `.xlsx` terlebih dahulu).
 
 ## Dukungan perangkat & kapasitas
 
@@ -181,7 +182,7 @@ lib/
   exam.ts                aturan murni: acak soal, timer, penilaian, data untuk peserta
   attempts.ts            orkestrasi database per request
   fullscreen.ts          layar penuh + fallback untuk browser yang menolaknya
-  csv.ts · report.ts     parser CSV soal · perbandingan pre/post
+  csv.ts · excel.ts · report.ts parser CSV & XLSX soal · auto-width Excel · perbandingan pre/post
 supabase/schema.sql      tabel, RLS, fungsi SQL atomik
 e2e/                     uji end-to-end dan uji beban (load.ts)
 docs/                    buku panduan + screenshot
@@ -196,7 +197,7 @@ docs/                    buku panduan + screenshot
 - Kunci jawaban tidak pernah keluar dari server. Nilai hanya dikirim ke peserta setelah dirilis.
 - Login admin memakai cookie HMAC (httpOnly, berlaku 12 jam). Setiap server action memeriksa login sendiri.
 - Header keamanan: tidak bisa di-iframe (anti-clickjacking), `nosniff`, dan `Referrer-Policy: same-origin`, karena link `/exam/<id>` adalah kunci peserta.
-- API pelanggaran hanya menerima 5 jenis resmi. Export CSV kebal formula Excel.
+- API pelanggaran hanya menerima 5 jenis resmi. Export CSV kebal formula Excel, export XLSX menggunakan formatting waktu lokal Jakarta dan auto-width.
 
 </details>
 

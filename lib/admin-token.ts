@@ -6,7 +6,7 @@ export const TTL_MS = 12 * 60 * 60 * 1000
 // The admin password doubles as the HMAC key, so changing it logs every admin out.
 function secret() {
   const s = process.env.ADMIN_PASSWORD
-  if (!s) throw new Error('ADMIN_PASSWORD belum diset')
+  if (!s) throw new Error('ADMIN_PASSWORD belum diset di .env.local')
   return s
 }
 
@@ -18,12 +18,16 @@ export function makeToken(now = Date.now(), key = secret()) {
   return `${exp}.${sign(exp, key)}`
 }
 
-export function verifyToken(token: string | undefined, now = Date.now(), key = secret()) {
+export function verifyToken(token: string | undefined, now = Date.now(), key?: string) {
   const [exp, mac] = token?.split('.') ?? []
   if (!exp || !mac || !(Number(exp) > now)) return false
+  const secretKey = key ?? secret()
   const given = Buffer.from(mac)
-  const expected = Buffer.from(sign(exp, key))
+  const expected = Buffer.from(sign(exp, secretKey))
   return given.length === expected.length && timingSafeEqual(given, expected)
 }
 
-export const passwordMatches = (input: string, key = secret()) => timingSafeEqual(digest(input), digest(key))
+export const passwordMatches = (input: string, key?: string) => {
+  const secretKey = key ?? secret()
+  return timingSafeEqual(digest(input), digest(secretKey))
+}

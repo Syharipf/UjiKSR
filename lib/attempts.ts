@@ -154,3 +154,17 @@ export async function finishRound(sessionId: string) {
     }),
   )
 }
+
+export async function forceSubmitAll(sessionId: string) {
+  const now = new Date()
+  const unsubmitted: { id: string }[] = must(
+    await db().from('attempts').select('id').eq('session_id', sessionId).is('submitted_at', null),
+  )
+  await Promise.all(
+    unsubmitted.map(async ({ id }) => {
+      const ctx = await loadCtx(id)
+      await finalize(ctx, 'timeout', now)
+    }),
+  )
+  must(await db().from('exam_sessions').update({ is_open: false, closes_at: now.toISOString() }).eq('id', sessionId))
+}

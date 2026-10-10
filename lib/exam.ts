@@ -28,7 +28,7 @@ export const hasStarted = (s: Pick<Session, 'started_at'>, now = Date.now()) => 
 
 // Waiting phones check for the start this often; "Mulai ujian" starts the clock a little later than
 // that, so every phone knows the start time before it comes and shows the questions at the same moment.
-export const LOBBY_POLL_MS = 5000
+export const LOBBY_POLL_MS = 2000
 export const START_DELAY_MS = 2 * LOBBY_POLL_MS + 1000
 
 // '2026-09-27' → '27 Sep 2026'. A bare date parses as UTC midnight, so format in UTC.

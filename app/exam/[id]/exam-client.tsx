@@ -38,7 +38,7 @@ function forget(id: string, submitted = false) {
   } catch {}
 }
 
-const RESULT_POLL_MS = 15_000
+const RESULT_POLL_MS = 3_000
 const RESULT_RETRY_MS = 2_000
 
 // While waiting for scores: poll every RESULT_POLL_MS, but once the release moment is closer than
@@ -108,15 +108,23 @@ export default function ExamClient({ id }: { id: string }) {
 
   const reportViolation = useCallback(
     (type: string) => {
-      call(`${base}/violation`, { type }).then((v) => {
-        apply(v)
-        if (v.status === 'active') {
-          setWarning(
-            `Pelanggaran ${v.violation_count} dari ${v.max_violations}. Jangan keluar dari layar ujian. ` +
-              `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`,
-          )
-        }
-      }, onError)
+      setWarning('Terdeteksi keluar dari layar ujian. Jangan membuka aplikasi lain, overlay, atau asisten.')
+      call(`${base}/violation`, { type }).then(
+        (v) => {
+          apply(v)
+          if (v.status === 'active') {
+            setWarning((prev) =>
+              prev
+                ? `Pelanggaran ${v.violation_count} dari ${v.max_violations}. Jangan keluar dari layar ujian. ` +
+                  `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
+                : '',
+            )
+          } else if (v.status === 'submitted') {
+            setWarning('')
+          }
+        },
+        onError,
+      )
     },
     [base, apply, onError],
   )

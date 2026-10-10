@@ -14,11 +14,15 @@ export default async function LoginPage(props: PageProps<'/admin/login'>) {
           <span>Password</span>
           <input type="password" name="password" required className="field font-normal" />
         </label>
-        {error && (
+        {error === 'env' ? (
+          <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm text-danger">
+            <code>ADMIN_PASSWORD</code> belum diset di <code>.env.local</code>.
+          </p>
+        ) : error ? (
           <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm text-danger">
             Password salah.
           </p>
-        )}
+        ) : null}
         <SubmitButton className="btn btn-primary w-full">Masuk</SubmitButton>
       </form>
     </main>

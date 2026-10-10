@@ -6,13 +6,17 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { COOKIE, makeToken, passwordMatches, TTL_MS } from '@/lib/admin-token'
 import { parseQuestionsCsv, toQuestion } from '@/lib/csv'
-import { finishRound } from '@/lib/attempts'
+import { parseQuestionsXlsx } from '@/lib/excel'
+import { finishRound, forceSubmitAll as attemptsForceSubmitAll } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
-import { deadlineFor, isOpen, START_DELAY_MS, timing, type Session } from '@/lib/exam'
+import { deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
 const back = (id: string, msg: string) => redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}`)
 
 export async function login(formData: FormData) {
+  if (!process.env.ADMIN_PASSWORD) {
+    redirect('/admin/login?error=env')
+  }
   if (!passwordMatches(String(formData.get('password') ?? ''))) {
     await new Promise((r) => setTimeout(r, 1000)) // slow down guessing
     redirect('/admin/login?error=1')
@@ -146,13 +150,15 @@ const TIMER_LOCKED = 'Pengaturan belum tersimpan — timer terkunci karena sudah
 export async function uploadQuestions(id: string, formData: FormData) {
   await requireAdmin()
   const file = formData.get('file')
-  if (!(file instanceof File) || file.size === 0) return back(id, 'Pilih file CSV dulu')
+  if (!(file instanceof File) || file.size === 0) return back(id, 'Pilih file soal dulu')
   const bytes = new Uint8Array(await file.arrayBuffer())
-  // .xlsx/.xls are binary (zip / OLE); parsing them as text only yields confusing row errors.
-  if ((bytes[0] === 0x50 && bytes[1] === 0x4b) || (bytes[0] === 0xd0 && bytes[1] === 0xcf)) {
-    return back(id, 'Ini file Excel, bukan CSV. Di Excel/Google Sheets pilih Save As / Download → CSV, lalu upload file .csv-nya.')
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf) {
+    return back(id, 'Format .xls lama tidak didukung. Simpan sebagai .xlsx atau .csv terlebih dahulu.')
   }
-  const { questions, errors } = parseQuestionsCsv(new TextDecoder().decode(bytes))
+  const isXlsx = bytes[0] === 0x50 && bytes[1] === 0x4b
+  const { questions, errors } = isXlsx
+    ? parseQuestionsXlsx(bytes)
+    : parseQuestionsCsv(new TextDecoder().decode(bytes))
   if (errors.length) return back(id, `Upload gagal — ${errors.slice(0, 5).join(' · ')}`)
   if (!questions.length) return back(id, 'File tidak berisi soal')
   if (await isLocked(id)) return back(id, LOCKED)
@@ -202,4 +208,57 @@ export async function resetAllAttempts(sessionId: string) {
   must(await db().from('exam_sessions').update({ started_at: null, closes_at: null }).eq('id', sessionId)) // a fresh lobby
   must(await db().from('attempts').delete().eq('session_id', sessionId))
   back(sessionId, 'Semua peserta direset')
+}
+
+export async function forceSubmitAll(sessionId: string) {
+  await requireAdmin()
+  await attemptsForceSubmitAll(sessionId)
+  back(sessionId, 'Semua peserta yang masih aktif berhasil dikumpulkan')
+}
+
+export async function duplicateSession(sessionId: string) {
+  await requireAdmin()
+  const source: Session = must(await db().from('exam_sessions').select('*').eq('id', sessionId).single())
+  const questions: Pick<Question, 'type' | 'text' | 'options' | 'answer_index' | 'position'>[] = must(
+    await db().from('questions').select('type, text, options, answer_index, position').eq('session_id', sessionId).order('position'),
+  )
+
+  const newKind = source.kind === 'pre' ? 'post' : 'pre'
+  const newTitle =
+    source.kind === 'pre'
+      ? source.title.replace(/pre[- ]?test/i, 'Post-test').replace(/pre/i, 'Post')
+      : `${source.title} (Salinan)`
+
+  let newSessionId = ''
+  for (let i = 0; i < 5; i++) {
+    const { data, error } = await db()
+      .from('exam_sessions')
+      .insert({
+        title: newTitle,
+        held_on: source.held_on,
+        kind: newKind,
+        timer_mode: source.timer_mode,
+        duration_sec: source.duration_sec,
+        per_question_sec: source.per_question_sec,
+        max_violations: source.max_violations,
+        is_open: false,
+        code: newCode(),
+      })
+      .select('id')
+      .single()
+    if (error?.code === '23505') continue
+    if (error) throw error
+    newSessionId = data.id
+    break
+  }
+  if (!newSessionId) throw new Error('Gagal membuat kode sesi unik')
+
+  if (questions.length) {
+    must(
+      await db()
+        .from('questions')
+        .insert(questions.map((q) => ({ ...q, session_id: newSessionId }))),
+    )
+  }
+  redirect(`/admin/sessions/${newSessionId}?msg=${encodeURIComponent(`Sesi berhasil diduplikasi (${questions.length} soal disalin)`)}`)
 }

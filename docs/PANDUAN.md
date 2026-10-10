@@ -87,18 +87,18 @@ Ada dua cara, dan keduanya bisa digabung.
 
 <p align="center"><img src="img/admin-add-question.webp" width="520" alt="Form tambah soal manual"></p>
 
-**b. Upload CSV** untuk banyak soal sekaligus. Buka **Upload CSV (ganti semua soal)**, pilih file `.csv`, lalu klik **Upload & ganti semua soal**. Upload **mengganti semua soal** yang sudah ada.
+**b. Upload file soal (Excel / CSV)** untuk banyak soal sekaligus. Buka **Upload file soal (Excel / CSV)**, pilih file `.xlsx` atau `.csv`, lalu klik **Upload & ganti semua soal**. Upload **mengganti semua soal** yang sudah ada.
 
 <p align="center"><img src="img/admin-upload-csv.webp" width="520" alt="Bagian upload CSV"></p>
 
-- Klik **Unduh contoh** untuk mendapatkan template.
-- Dari Excel: *File → Save As → CSV*. Dari Google Sheets: *File → Download → CSV*.
-- File Excel (`.xlsx`) ditolak. Simpan dulu sebagai CSV.
+- Klik template **Excel (.xlsx)** (dengan auto-width rapi) atau **CSV (.csv)** untuk mengunduh contoh.
+- Mendukung file Excel (`.xlsx`) langsung maupun CSV (`.csv`). Format `.xls` lama tidak didukung (simpan sebagai `.xlsx` terlebih dahulu).
 - Kalau ada baris yang salah, upload dibatalkan dan nomor barisnya ditampilkan. Soal lama tetap aman.
-- Format lengkapnya ada di [Lampiran A](#a-format-csv-soal).
+- Format lengkapnya ada di [Lampiran A](#a-format-soal-excel--csv).
 
-**Periksa kunci jawaban.** Di daftar soal, jawaban benar ditandai **hijau dengan ✓**. Periksa sebelum membuka sesi: begitu ada peserta yang mulai, soal **terkunci** dan tidak bisa diubah lagi.
+**Periksa kunci jawaban & analisis butir soal.** Di daftar soal, jawaban benar ditandai **hijau dengan ✓**. Setelah peserta mulai menjawab, tiap soal menampilkan badge **akurasi** (misal: *Akurasi 85% (34/40)*) dengan warna hijau (≥70%), kuning (40–69%), atau merah (<40%) untuk mengetahui materi yang sulit.
 
+**Duplikat sesi.** Gunakan tombol **Duplikat sesi** di kanan atas judul sesi untuk langsung menyalin seluruh soal dan pengaturan ke sesi baru (otomatis mengubah Pre-test menjadi Post-test).
 > **Kenapa terkunci?** Setiap peserta mendapat urutan soal dan opsi acak saat mulai. Mengubah soal di tengah jalan bisa merusak penilaian. Untuk mengubah soal setelah ada peserta, klik **Reset semua** di bagian Peserta. Semua jawaban peserta ikut terhapus. Mode timer, durasi, dan waktu per soal juga terkunci dengan alasan yang sama.
 
 ### 2.4 Membuka sesi dan menayangkan QR
@@ -124,9 +124,13 @@ Untuk share screen (Zoom/Meet) atau proyektor, klik **Tayangkan QR & kode**. Hal
 
 ### 3.1 Memantau peserta
 
-Bagian **Peserta** menampilkan semua peserta beserta nilai, jumlah pelanggaran, dan statusnya. Halaman **memperbarui diri tiap 10 detik**, jadi tidak perlu di-refresh.
+Bagian **Peserta** menampilkan semua peserta beserta nilai, jumlah pelanggaran, dan statusnya. Halaman **memperbarui diri tiap 3 detik**, jadi tidak perlu di-refresh.
 
 <p align="center"><img src="img/admin-participants.webp" width="720" alt="Tabel peserta dengan status dan log pelanggaran"></p>
+
+- **Ringkasan Statistik Cepat**: Kartu di atas tabel merangkum rata-rata nilai, nilai tertinggi, nilai terendah, jumlah peserta selesai, dan total pelanggaran secara langsung.
+- **Pencarian & Filter**: Cari nama, NIM, atau prodi secara instan di kotak pencarian, atau klik tab filter (*Semua*, *Mengerjakan*, *Selesai*, *Ada Pelanggaran*).
+- **Salin Link Pengerjaan**: Tombol **Salin link** di tiap baris menyalin URL pengerjaan peserta (`/exam/<id>`), sangat berguna jika HP peserta bermasalah dan perlu dibuka di HP lain tanpa kehilangan jawaban.
 
 | Status | Arti |
 |---|---|
@@ -141,7 +145,7 @@ Klik angka di kolom **Pelanggaran** untuk melihat log-nya: jam kejadian dan jeni
 
 - **"NIM ini sudah memulai ujian di sesi ini"**: satu NIM hanya bisa mengerjakan satu kali per sesi. Kalau peserta memang perlu mengulang (misalnya salah ketik nama, HP mati, atau ganti HP), klik **Reset** di baris peserta itu. Jawabannya terhapus dan dia bisa mulai lagi dari awal.
 - **Peserta menutup browser tanpa sengaja**: minta dia membuka lagi QR/link di HP dan browser yang sama, lalu tekan **Lanjutkan ujian**. Waktu tetap berjalan di server, dan membuka ulang tercatat sebagai satu pelanggaran.
-- **Peserta ganti HP**: pengerjaan tidak bisa dilanjutkan di HP lain. Gunakan **Reset**, lalu peserta mulai ulang.
+- **Peserta ganti HP**: Klik tombol **Salin link** di baris peserta untuk menyalin link pengerjaannya, lalu buka link tersebut di HP pengganti (disarankan mode Incognito/Tab Samaran) agar peserta bisa melanjutkan tanpa kehilangan jawaban. Atau gunakan **Reset** jika ingin peserta mengulang dari awal.
 
 ### 3.3 Menutup sesi dan merilis nilai
 
@@ -157,12 +161,13 @@ Nilai baru muncul di HP peserta kalau **sesi sudah ditutup dan semua peserta sud
 
 | Tombol | Fungsi |
 |---|---|
-| **Export CSV** | Mengunduh `hasil-KODE.csv` berisi nama, NIM, nilai, pelanggaran, status, jam mulai, dan jam selesai. Bisa dibuka di Excel. |
+| **Duplikat sesi** | Menyalin sesi dan seluruh bank soal ke sesi baru (misal dari Pre-test ke Post-test) dalam satu klik. |
+| **Paksa kumpul** | Hanya muncul saat ada peserta yang sedang mengerjakan. Langsung mengumpulkan jawaban seluruh peserta aktif seketika dan menutup sesi. |
+| **Export Excel** | Mengunduh `hasil-KODE.xlsx` berisi nama, NIM, nilai, pelanggaran, status, jam mulai, dan jam selesai dengan kolom auto-width rapi dan waktu lokal Jakarta. |
+| **Export CSV** | Mengunduh `hasil-KODE.csv` teks polos (UTF-8 BOM). |
 | **Reset** (per peserta) | Menghapus pengerjaan satu peserta supaya dia bisa mulai ulang. |
 | **Reset semua** | Menghapus semua peserta beserta jawabannya. Soal dan timer bisa diubah lagi setelah ini. |
 | **Hapus sesi** (di Pengaturan) | Menghapus sesi beserta seluruh soal dan peserta. **Tidak bisa dibatalkan**, jadi export dulu kalau hasilnya masih perlu. |
-
-Judul, tanggal, jenis, dan batas pelanggaran tetap bisa diubah di **Pengaturan** kapan saja.
 
 ### 3.5 Membandingkan pre-test dan post-test
 
@@ -259,7 +264,7 @@ Kalau halaman sudah telanjur ditutup, buka lagi QR/link yang sama di HP yang sam
 
 **Setelah selesai**
 - [ ] Tunggu sesi tutup otomatis (atau klik **Tutup sesi**) dan semua peserta selesai sampai nilai muncul.
-- [ ] **Export CSV** untuk arsip.
+- [ ] **Export Excel / CSV** untuk arsip.
 - [ ] Setelah post-test, buka **Bandingkan pre-test vs post-test**.
 
 ---
@@ -313,7 +318,7 @@ Satu kejadian yang memicu beberapa sinyal sekaligus hanya dihitung **sekali** (j
 | Layar terus terkunci | Tekan **Saya mengerti, lanjutkan**. Kalau link dibuka dari aplikasi lain (Instagram/LINE), buka ulang di Chrome atau Safari. |
 | Nilai belum muncul | Sesi belum tutup, atau masih ada peserta yang mengerjakan (lihat hitung mundur). Biarkan halaman terbuka, atau buka lagi link-nya nanti. |
 | Muncul *"Browser ini terlalu lama"* | Perbarui Chrome/Safari, atau pakai HP lain. Minimal Chrome 111 atau iOS 16.4. |
-| Kunci jawaban ternyata salah setelah ujian | Soal terkunci selama ada peserta dan nilai dihitung saat jawaban dikumpulkan. Export CSV lalu koreksi manual, atau **Reset semua**, perbaiki soal, dan ulangi ujiannya (semua jawaban hilang). Karena itu, periksa kunci sebelum membuka sesi. |
+| Kunci jawaban ternyata salah setelah ujian | Soal terkunci selama ada peserta dan nilai dihitung saat jawaban dikumpulkan. Export Excel/CSV lalu koreksi manual, atau **Reset semua**, perbaiki soal, dan ulangi ujiannya (semua jawaban hilang). Karena itu, periksa kunci sebelum membuka sesi. |
 | Panel admin: *"Database belum bisa diakses"* | Project Supabase ter-*pause* atau konfigurasi berubah. Buka dashboard Supabase dan klik *Restore project*, lalu coba lagi. |
 | Lupa password admin | Pengelola mengganti `ADMIN_PASSWORD` di Vercel (Settings → Environment Variables), lalu **Redeploy**. |
 
@@ -321,7 +326,7 @@ Satu kejadian yang memicu beberapa sinyal sekaligus hanya dihitung **sekali** (j
 
 ## 8. Lampiran
 
-### A. Format CSV soal
+### A. Format soal (Excel & CSV)
 
 Baris pertama adalah judul kolom: `type,question,a,b,c,d,e,answer`.
 

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { clock } from '@/lib/exam'
 
-const REFRESH_MS = 10_000
+const REFRESH_MS = 3_000
 
 // Re-render the server page so new participants, scores and violations show up without a reload.
 // Skipped while the tab is hidden.

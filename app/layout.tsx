@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
+import Script from 'next/script'
 import { themeScript } from '@/lib/theme'
 import './globals.css'
 
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     // suppressHydrationWarning: themeScript may set data-theme before React hydrates.
     <html lang="id" suppressHydrationWarning className={jakarta.variable}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-dvh bg-page text-fg antialiased">
         {/* Shown only where globals.css says the browser is below Next.js' baseline (Chrome 111 / Safari 16.4). */}
