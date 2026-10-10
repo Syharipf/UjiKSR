@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo.svg" alt="Logo UjiKSR" width="96" height="96">
+  <img src="public/logo.svg" alt="Logo UjiKSR" height="64">
 </p>
 
 <h1 align="center">UjiKSR</h1>
@@ -42,24 +42,22 @@
 ## Fitur
 
 **Untuk peserta**
-- Tanpa akun: scan QR, isi nama, NIM, dan prodi, lalu tunggu di lobi sampai panitia menekan Mulai — semua peserta mulai serentak.
-- Dua mode timer: **total** (bebas bolak-balik antar soal) atau **per soal** (tidak bisa kembali ke soal sebelumnya).
-- Soal dan urutan opsi diacak untuk tiap peserta.
-- Timer dan penilaian dihitung server, jadi tidak bisa diakali dari HP.
-- Animasi selamat setelah selesai, dan nilai muncul serentak untuk semua peserta setelah sesi tutup, tanpa refresh.
-- Tampilan terang/gelap, nyaman di HP dan laptop.
+- **Tanpa akun & mudah**: scan QR atau ketik kode sesi, isi nama, NIM (hanya angka), dan prodi, lalu tunggu di lobi sampai panitia menekan Mulai — semua peserta mulai pada detik yang sama.
+- **Dua mode timer**: **total** (bebas bolak-balik antar soal) atau **per soal** (waktu per butir, tidak bisa kembali ke soal sebelumnya).
+- **Acak & adil**: Soal dan urutan opsi diacak untuk tiap peserta.
+- **Anti-cheat server-side**: Timer dan penilaian dihitung server, sehingga tidak bisa diakali dari jam HP peserta.
+- **Animasi & nilai serentak**: Konfeti selebrasi setelah selesai, dan nilai muncul serentak untuk semua peserta setelah sesi ditutup tanpa perlu refresh.
+- **Tema Terang & Gelap**: Toggle instan 1-klik (☀️ Terang ↔ 🌙 Gelap), nyaman di HP maupun laptop, dengan identitas Merah PMI dan Navy IFRC.
 
 **Untuk panitia** (`/admin`)
-- Buat sesi pre-test/post-test lengkap dengan tanggal, mode timer, dan batas pelanggaran.
-- **Duplikat sesi**: salin seluruh bank soal dan pengaturan dari Pre-test ke Post-test dalam satu klik.
-- Soal lewat form manual atau upload Excel (.xlsx dengan auto-width) / CSV.
-- **Analisis butir soal**: persentase akurasi jawaban benar per nomor soal untuk melihat materi yang sulit.
-- Halaman **Tayangkan QR & kode** untuk share screen atau proyektor: QR dan kode sesi dalam ukuran besar, tanpa daftar soal dan kunci jawaban. Sesi dibuka dengan satu klik dan tutup otomatis setelah durasi ujian.
-- Pantau peserta secara langsung: ringkasan statistik (rata-rata, tertinggi, terendah), pencarian & filter, salin link pengerjaan, paksa kumpul semua (*force submit*), dan log pelanggaran. Halaman memperbarui diri tiap 3 detik.
-- Hitung mundur sampai nilai tampil di HP peserta.
-- Export hasil ke Excel (.xlsx dengan auto-width) atau CSV, reset peserta, hapus sesi.
-- Bandingkan pre-test vs post-test per peserta (dicocokkan lewat NIM) beserta rata-rata peningkatannya.
-<p align="center">
+- **Manajemen sesi**: Buat sesi pre-test/post-test lengkap dengan tanggal (`held_on`), pilihan pasangan sesi pre-test terkait, mode timer, dan batas pelanggaran.
+- **Duplikat sesi**: Salin seluruh bank soal dan pengaturan dari Pre-test ke Post-test dalam satu klik.
+- **Input soal fleksibel**: Form manual interaktif atau upload file Excel (.xlsx dengan auto-width) dan CSV.
+- **Analisis butir soal**: Persentase akurasi jawaban benar per nomor soal dengan visualisasi warna untuk mendeteksi materi yang sulit.
+- **Halaman Tayangkan QR & kode**: Khusus proyektor/share-screen dengan QR besar aman tanpa membocorkan kunci jawaban; buka sesi instan dan tutup otomatis sesuai durasi.
+- **Live monitor peserta (3 detik)**: Statistik ringkas (rata-rata, tertinggi, terendah), pencarian & filter, salin link darurat pengerjaan peserta, *force submit* (paksa kumpul semua), dan log rincian pelanggaran.
+- **Bandingkan pre-test vs post-test**: Analisis komparasi nilai per peserta (dicocokkan otomatis lewat NIM) dengan visualisasi delta peningkatan nilai dan statistik agregat.
+- **Export & kelola**: Export hasil ke Excel (.xlsx dengan auto-width rapi dan zona waktu Jakarta) atau CSV, reset per peserta atau semua, dan hapus sesi.
   <img src="docs/img/admin-qr-display.webp" width="700" alt="Halaman Tayangkan QR & kode untuk share screen atau proyektor"><br>
   <sub>Tayangkan QR & kode: aman di-share screen, tanpa kunci jawaban</sub>
 </p>
@@ -118,8 +116,14 @@ Kebutuhan: [Bun](https://bun.sh) 1.2+, akun [Supabase](https://supabase.com), da
 
 ### Upgrade database lama
 
-Perubahan skema dicatat di bagian atas `supabase/schema.sql`. Contohnya kolom tanggal sesi (`held_on`) untuk database yang dibuat sebelum fitur itu ada. Jalankan SQL tersebut di Supabase **sebelum** merge ke `master`, karena setiap merge langsung ter-deploy ke production.
+Perubahan skema dicatat di bagian atas [`supabase/schema.sql`](supabase/schema.sql). Untuk database yang dibuat sebelum pembaruan pre/post pairing, jalankan migrasi ini di SQL Editor Supabase:
 
+```sql
+-- Penambahan kolom sesi pre-test rujukan (relasi pre & post):
+alter table exam_sessions add column if not exists pre_session_id uuid references exam_sessions (id) on delete set null;
+-- Kolom tanggal pelaksanaan sesi:
+alter table exam_sessions add column if not exists held_on date not null default current_date;
+```
 ## Format soal (Excel & CSV)
 
 Kolom: `type,question,a,b,c,d,e,answer`. Template siap pakai tersedia dalam format Excel ([`public/contoh-soal.xlsx`](public/contoh-soal.xlsx)) dengan lebar kolom otomatis (*auto-width*) dan CSV ([`public/contoh-soal.csv`](public/contoh-soal.csv)).

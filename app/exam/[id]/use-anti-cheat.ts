@@ -55,7 +55,6 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
     const listeners: [EventTarget, string, () => void][] = [
       [document, 'visibilitychange', () => document.visibilityState === 'hidden' && report('hidden')],
       [window, 'blur', () => report('blur')],
-      [window, 'pagehide', () => report('hidden')],
       [document, 'fullscreenchange', () => !isFullscreen() && report('fullscreen_exit')],
       [
         window,

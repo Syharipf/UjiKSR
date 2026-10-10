@@ -112,8 +112,12 @@ export default function ExamClient({ id }: { id: string }) {
 
   const refresh = useCallback(() => call(base).then(apply, onError), [base, apply, onError])
 
+  const lastViolationRef = useRef(0)
   const reportViolation = useCallback(
     (type: string) => {
+      const now = Date.now()
+      if (now - lastViolationRef.current < 2000) return
+      lastViolationRef.current = now
       setWarning('Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten.')
       call(`${base}/violation`, { type }).then(
         (v) => {

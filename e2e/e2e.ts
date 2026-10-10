@@ -388,17 +388,16 @@ try {
   await adminPage.emulateMedia({ colorScheme: 'light' })
   const lightBg = await surface()
   const toggle = adminPage.getByRole('button', { name: /^Tema:/ })
-  await toggle.click() // Otomatis → Terang
-  await toggle.click() // Terang → Gelap
+  await toggle.click() // Terang → Gelap (1 click switches to dark)
   assert.equal(await theme(), 'dark')
   assert.notEqual(await surface(), lightBg)
   await adminPage.reload()
   assert.equal(await theme(), 'dark')
   assert.notEqual(await surface(), lightBg)
-  await adminPage.getByRole('button', { name: /^Tema:/ }).click() // Gelap → Otomatis
-  assert.equal(await theme(), 'system')
+  await adminPage.getByRole('button', { name: /^Tema:/ }).click() // Gelap → Terang
+  assert.equal(await theme(), 'light')
   assert.equal(await surface(), lightBg)
-  log('theme toggle switches to dark, survives reload, and returns to following the device')
+  log('theme toggle switches to dark, survives reload, and returns to light')
 
   // --- session date + delete ----------------------------------------------------
   await adminPage.goto(`${BASE}/admin`)
