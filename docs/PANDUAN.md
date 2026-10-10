@@ -9,7 +9,7 @@
   untuk <b>panitia</b> dan <b>peserta</b>.
 </p>
 
-<p align="center"><a href="https://ujiksr.vercel.app">ujiksr.vercel.app</a></p>
+<p align="center"><a href="https://ujiksr.vercel.app"><b>ujiksr.vercel.app</b></a> · <a href="https://syharipf.github.io/UjiKSR/"><b>Landing Page</b></a></p>
 
 ---
 

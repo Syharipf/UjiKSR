@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://ujiksr.vercel.app"><b>ujiksr.vercel.app</b></a> ·
+  <a href="https://syharipf.github.io/UjiKSR/"><b>Landing Page</b></a> ·
   <a href="docs/PANDUAN.md"><b>Buku Panduan</b></a> ·
   <a href="#mulai-cepat">Mulai cepat</a> ·
   <a href="#anti-cheat">Anti-cheat</a>
