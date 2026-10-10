@@ -1,6 +1,6 @@
 // One-shot CSS confetti burst (styles in globals.css). Positions come from the index, not
 // Math.random, so renders stay pure. Hidden when the device asks for reduced motion.
-const COLORS = ['#dc2626', '#f59e0b', '#22c55e', '#3b82f6', '#ec4899']
+const COLORS = ['#c8102e', '#13294b', '#f3b14e', '#8fb2ff', '#ff7d8a']
 
 export default function Confetti() {
   return (

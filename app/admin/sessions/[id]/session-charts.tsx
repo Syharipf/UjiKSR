@@ -3,11 +3,13 @@
 import type { ScoreDistribution } from '@/lib/report'
 
 const TIER_COLORS: Record<string, { bar: string; text: string }> = {
-  '90–100': { bar: 'bg-emerald-600 dark:bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
-  '80–89': { bar: 'bg-green-600 dark:bg-green-500', text: 'text-green-700 dark:text-green-400' },
-  '70–79': { bar: 'bg-sky-600 dark:bg-sky-500', text: 'text-sky-700 dark:text-sky-400' },
-  '60–69': { bar: 'bg-amber-500 dark:bg-amber-400', text: 'text-amber-800 dark:text-amber-300' },
-  '< 60': { bar: 'bg-red-600 dark:bg-red-500', text: 'text-red-700 dark:text-red-400' },
+  // Theme tokens (globals.css), not Tailwind's dark: variant, which follows only the device setting and
+  // would ignore the in-app theme toggle.
+  '90–100': { bar: 'bg-tier-1', text: 'text-tier-1' },
+  '80–89': { bar: 'bg-tier-2', text: 'text-tier-2' },
+  '70–79': { bar: 'bg-tier-3', text: 'text-tier-3' },
+  '60–69': { bar: 'bg-tier-4', text: 'text-warn' },
+  '< 60': { bar: 'bg-tier-5', text: 'text-danger' },
 }
 
 export default function SessionCharts({
@@ -36,7 +38,7 @@ export default function SessionCharts({
       <div className="card space-y-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-base font-bold">Distribusi Nilai Peserta</h3>
+            <h3 className="display text-base">Distribusi nilai peserta</h3>
             <p className="text-xs text-muted">Sebaran nilai dari {distribution.totalGraded} peserta yang sudah dinilai</p>
           </div>
           {distribution.totalGraded > 0 && (
@@ -62,7 +64,7 @@ export default function SessionCharts({
                       {tier.range}{' '}
                       <span className="font-normal text-muted">({tier.label})</span>
                     </span>
-                    <span className="font-mono text-muted">
+                    <span className="text-muted">
                       <b className={`font-semibold ${tier.count > 0 ? color.text : 'text-fg'}`}>{tier.count}</b> orang{' '}
                       ({tier.percentage}%)
                     </span>
@@ -83,7 +85,7 @@ export default function SessionCharts({
       {/* 2. Donut & Progress Chart: Kelulusan & Status */}
       <div className="card flex flex-col justify-between space-y-4 p-4 sm:p-5">
         <div>
-          <h3 className="text-base font-bold">Ringkasan Kelulusan &amp; Status</h3>
+          <h3 className="display text-base">Kelulusan dan progres</h3>
           <p className="text-xs text-muted">Batas kelulusan standar KKM 70</p>
         </div>
 
@@ -110,7 +112,7 @@ export default function SessionCharts({
                   cx="50"
                   cy="50"
                   r={radius}
-                  className="stroke-red-500"
+                  className="stroke-tier-5"
                   strokeWidth="12"
                   strokeDasharray={`${failStroke} ${circumference}`}
                   strokeDashoffset={-passStroke}
@@ -122,7 +124,7 @@ export default function SessionCharts({
                   cx="50"
                   cy="50"
                   r={radius}
-                  className="stroke-emerald-600 dark:stroke-emerald-400"
+                  className="stroke-tier-1"
                   strokeWidth="12"
                   strokeDasharray={`${passStroke} ${circumference}`}
                   strokeDashoffset="0"
@@ -132,21 +134,21 @@ export default function SessionCharts({
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                 <span className="text-xl font-extrabold text-fg">{distribution.passRate ?? 0}%</span>
-                <span className="text-[10px] uppercase font-bold text-muted">Lulus</span>
+                <span className="text-xs font-semibold text-muted">lulus</span>
               </div>
             </div>
           )}
 
           <div className="space-y-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="size-3 rounded-full bg-emerald-600 dark:bg-emerald-400 shrink-0" />
+              <span className="size-3 rounded-full bg-tier-1 shrink-0" />
               <div>
                 <p className="font-semibold text-fg">Lulus (&ge; 70)</p>
                 <p className="text-muted">{distribution.passedCount} peserta</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="size-3 rounded-full bg-red-500 shrink-0" />
+              <span className="size-3 rounded-full bg-tier-5 shrink-0" />
               <div>
                 <p className="font-semibold text-fg">Belum (&lt; 70)</p>
                 <p className="text-muted">{distribution.failedCount} peserta</p>
@@ -158,7 +160,7 @@ export default function SessionCharts({
         {/* Progress Pengerjaan */}
         <div className="border-t border-line pt-3 space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold">
-            <span>Progres Peserta</span>
+            <span>Progres peserta</span>
             <span>{submittedCount} / {totalAttempts} selesai</span>
           </div>
           <div className="flex h-2 w-full overflow-hidden rounded-full bg-subtle">
@@ -168,7 +170,7 @@ export default function SessionCharts({
               title={`Selesai: ${submittedCount}`}
             />
             <div
-              className="bg-amber-500 transition-all"
+              className="bg-tier-4 transition-all"
               style={{ width: `${totalAttempts > 0 ? (workingCount / totalAttempts) * 100 : 0}%` }}
               title={`Sedang Mengerjakan: ${workingCount}`}
             />
@@ -178,7 +180,7 @@ export default function SessionCharts({
               <span className="size-2 rounded-full bg-ok" /> Selesai ({submittedCount})
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-amber-500" /> Mengerjakan ({workingCount})
+              <span className="size-2 rounded-full bg-tier-4" /> Mengerjakan ({workingCount})
             </span>
           </div>
         </div>

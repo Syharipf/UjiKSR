@@ -20,19 +20,19 @@ export function AutoRefresh() {
 // Projector view: fill the screen. The button's wrapper hides once fullscreen (globals.css).
 export function FullscreenButton() {
   return (
-    <button type="button" onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})} className="btn btn-secondary text-sm whitespace-nowrap">
+    <button type="button" onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})} className="btn btn-secondary text-sm whitespace-nowrap text-fg">
       Layar penuh
     </button>
   )
 }
 
 // Ticks down to `until` on the server's clock (the admin's device clock may be off).
-export function Countdown({ until, serverNow }: Readonly<{ until: number; serverNow: number }>) {
+export function Countdown({ until, serverNow, className = 'font-mono font-semibold text-fg' }: Readonly<{ until: number; serverNow: number; className?: string }>) {
   const [left, setLeft] = useState(until - serverNow)
   useEffect(() => {
     const offset = serverNow - Date.now()
     const t = setInterval(() => setLeft(until - (Date.now() + offset)), 250)
     return () => clearInterval(t)
   }, [until, serverNow])
-  return <span className="font-mono font-semibold text-fg">{clock(Math.max(0, left))}</span>
+  return <span className={className}>{clock(Math.max(0, left))}</span>
 }

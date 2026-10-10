@@ -1,16 +1,12 @@
-import Image from 'next/image'
-
-// Logo + app name, used at the top of every page.
-export default function Brand({ subtitle = 'KSR PMI Unit Universitas Telkom' }: Readonly<{ subtitle?: string }>) {
+// App name, at the top of every page. No logo yet. `onBand` when it sits on the red band.
+export default function Brand({
+  subtitle = 'KSR PMI Unit Universitas Telkom',
+  onBand = false,
+}: Readonly<{ subtitle?: string | null; onBand?: boolean }>) {
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <Image src="/logo.svg" alt="Logo UjiKSR" width={40} height={40} priority className="size-10 shrink-0" />
-      <div className="min-w-0 leading-tight">
-        <p className="text-lg font-extrabold tracking-tight">
-          Uji<span className="text-primary">KSR</span>
-        </p>
-        <p className="text-xs text-muted">{subtitle}</p>
-      </div>
+    <div className="min-w-0 leading-tight">
+      <p className="display text-lg">UjiKSR</p>
+      {subtitle && <p className={`text-xs ${onBand ? 'text-on-band/85' : 'text-muted'}`}>{subtitle}</p>}
     </div>
   )
 }

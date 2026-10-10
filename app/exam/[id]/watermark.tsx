@@ -9,11 +9,11 @@ export default function Watermark({ text }: { text: string }) {
     )}")`
   return (
     <>
-      <div aria-hidden className="watermark-light pointer-events-none fixed inset-0 z-40" style={{ backgroundImage: tile('rgba(15,23,42,0.12)') }} />
+      <div aria-hidden className="watermark-light pointer-events-none fixed inset-0 z-40" style={{ backgroundImage: tile('rgba(15,26,46,0.12)') }} />
       <div
         aria-hidden
         className="watermark-dark pointer-events-none fixed inset-0 z-40"
-        style={{ backgroundImage: tile('rgba(241,245,249,0.12)') }}
+        style={{ backgroundImage: tile('rgba(238,242,248,0.12)') }}
       />
     </>
   )

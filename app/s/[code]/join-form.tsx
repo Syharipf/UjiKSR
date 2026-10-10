@@ -4,13 +4,16 @@ import { useState, useSyncExternalStore, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Session } from '@/lib/exam'
 import { PendingLabel } from '@/app/pending'
+import Band from '@/app/band'
 import Brand from '@/app/brand'
+import { NIM_MAX, NIM_MIN, NIM_PATTERN } from '@/lib/nim'
 import ThemeToggle from '@/app/theme-toggle'
 import { enterFullscreen, exitFullscreen } from '@/lib/fullscreen'
 import ResultLink from './result-link'
 
 type Props = {
   session: Pick<Session, 'code' | 'title' | 'kind' | 'timer_mode' | 'duration_sec' | 'per_question_sec' | 'max_violations'>
+  total: number
 }
 
 const noSubscribe = () => () => {}
@@ -22,7 +25,7 @@ function stored(key: string) {
   }
 }
 
-export default function JoinForm({ session }: Props) {
+export default function JoinForm({ session, total }: Props) {
   const router = useRouter()
   const key = `attempt:${session.code}`
   const existing = useSyncExternalStore(noSubscribe, () => stored(key), () => null)
@@ -64,96 +67,134 @@ export default function JoinForm({ session }: Props) {
     }
   }
 
-  const timer =
-    session.timer_mode === 'per_question'
-      ? `${session.per_question_sec} detik per soal, tidak bisa kembali ke soal sebelumnya`
-      : `${session.duration_sec / 60} menit untuk semua soal`
+  const perQuestion = session.timer_mode === 'per_question'
+  const timeStat = perQuestion ? { value: session.per_question_sec, unit: 'detik per soal' } : { value: session.duration_sec / 60, unit: 'menit total' }
 
   return (
-    <main className="mx-auto max-w-md space-y-6 p-5 pb-10">
-      <header className="flex items-center justify-between gap-3">
-        <Brand />
-        <ThemeToggle compact />
-      </header>
+    <div className="min-h-dvh">
+      <Band>
+        <div className="flex items-center justify-between gap-3">
+          <Brand onBand subtitle={null} />
+          <ThemeToggle compact onBand />
+        </div>
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap gap-2 text-sm font-bold">
+            <span className="rounded-full bg-on-band/18 px-2.5 py-1">{session.kind === 'pre' ? 'Pre-test' : 'Post-test'}</span>
+            <span className="rounded-full bg-on-band/18 px-2.5 py-1">Kode {session.code}</span>
+          </div>
+          <h1 className="display text-[1.7rem] text-balance">{session.title}</h1>
+        </div>
+      </Band>
 
-      <div className="space-y-2">
-        <span className="badge bg-primary-soft text-primary">{session.kind === 'pre' ? 'Pre-test' : 'Post-test'}</span>
-        <h1 className="text-2xl font-extrabold tracking-tight text-balance">{session.title}</h1>
-      </div>
+      <main className="mx-auto max-w-md space-y-6 px-5 pt-6 pb-10">
+        <section className="space-y-4">
+          <h2 className="display text-[1.05rem]">Sebelum mulai</h2>
+          <dl className="grid grid-cols-3 gap-2">
+            <Stat value={timeStat.value} label={timeStat.unit} />
+            <Stat value={total} label="soal" />
+            <Stat value={`${session.max_violations}×`} label="batas pelanggaran" accent />
+          </dl>
+          <ul className="space-y-3.5 text-[0.95rem] leading-relaxed text-secondary">
+            <Rule icon="clock">
+              {perQuestion
+                ? 'Soal muncul satu per satu dan tidak bisa kembali ke soal sebelumnya. '
+                : 'Kamu bisa bolak-balik antarsoal dan mengubah jawaban sampai dikumpulkan. '}
+              Ujian dimulai serentak oleh panitia; yang masuk terlambat hanya mendapat sisa waktu.
+            </Rule>
+            <Rule icon="bell">
+              Aktifkan <b className="text-fg">Jangan Ganggu</b> dan tutup aplikasi lain.
+            </Rule>
+            <Rule icon="megaphone">
+              Pindah aplikasi, membuka notifikasi, split screen, atau keluar layar penuh dihitung pelanggaran. Pelanggaran ke-
+              {session.max_violations} mengumpulkan jawabanmu otomatis.
+            </Rule>
+            <Rule icon="globe">
+              Buka di <b className="text-fg">Chrome</b> atau <b className="text-fg">Safari</b>, bukan dari dalam Instagram, LINE, atau TikTok.
+            </Rule>
+          </ul>
+        </section>
 
-      <section className="card p-4 text-sm">
-        <h2 className="mb-3 font-bold">Aturan ujian</h2>
-        <ul className="space-y-3">
-          <Rule icon="clock">
-            Waktu: {timer}. Ujian dimulai serentak oleh panitia; yang masuk terlambat hanya mendapat sisa waktu.
-          </Rule>
-          <Rule icon="bell">
-            Aktifkan mode <b>Jangan Ganggu</b> dan tutup aplikasi lain sebelum mulai.
-          </Rule>
-          <Rule icon="screen">
-            Ujian berjalan dalam layar penuh. Pindah aplikasi/tab, membuka notifikasi, split screen, keluar layar penuh, atau menutup
-            browser dihitung pelanggaran.
-          </Rule>
-          <Rule icon="alert">Pelanggaran ke-{session.max_violations} membuat jawabanmu otomatis dikumpulkan.</Rule>
-          <Rule icon="globe">
-            Buka link ini di <b>Chrome</b> (Android) atau <b>Safari</b> (iPhone), bukan dari dalam aplikasi Instagram/LINE/TikTok.
-          </Rule>
-        </ul>
-      </section>
+        <div className="border-t-2 border-dashed border-line" />
 
-      <ResultLink code={session.code} />
+        <ResultLink code={session.code} />
 
-      {existing ? (
-        <button onClick={resume} disabled={resuming} aria-busy={resuming} className="btn btn-primary w-full">
-          <PendingLabel pending={resuming}>Lanjutkan ujian</PendingLabel>
-        </button>
-      ) : finished ? (
-        <p className="text-center text-sm text-muted">Ujian ini sudah dikerjakan dari HP ini. Satu HP hanya bisa dipakai satu peserta per sesi.</p>
-      ) : (
-        <form onSubmit={start} className="card space-y-4 p-4">
-          <label className="grid gap-1.5 text-sm font-semibold">
-            <span>Nama lengkap</span>
-            <input name="name" required maxLength={100} autoComplete="name" className="field font-normal" />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            <span>NIM</span>
-            <input name="nim" required maxLength={30} autoComplete="off" className="field font-normal" />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            <span>Prodi</span>
-            <input name="prodi" required maxLength={100} placeholder="mis. S1 Informatika" className="field font-normal" />
-          </label>
-          {error && (
-            <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm text-danger">
-              {error}
-            </p>
-          )}
-          <button type="submit" disabled={busy} aria-busy={busy} className="btn btn-primary w-full">
-            <PendingLabel pending={busy}>Masuk ujian</PendingLabel>
+        {existing ? (
+          <button onClick={resume} disabled={resuming} aria-busy={resuming} className="btn btn-primary h-13 w-full text-base">
+            <PendingLabel pending={resuming}>Lanjutkan ujian</PendingLabel>
           </button>
-        </form>
-      )}
-    </main>
+        ) : finished ? (
+          <p className="text-center text-sm text-muted">Ujian ini sudah dikerjakan dari HP ini. Satu HP hanya bisa dipakai satu peserta per sesi.</p>
+        ) : (
+          <form onSubmit={start} className="space-y-4">
+            <h2 className="display text-[1.05rem]">Data peserta</h2>
+            <label className="grid gap-1.5 text-sm font-bold">
+              <span>Nama lengkap</span>
+              <input name="name" required maxLength={100} autoComplete="name" className="field font-normal" />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              <span>NIM</span>
+              <input
+                name="nim"
+                required
+                inputMode="numeric"
+                pattern={NIM_PATTERN}
+                minLength={NIM_MIN}
+                maxLength={NIM_MAX}
+                autoComplete="off"
+                onChange={(e) => {
+                  e.currentTarget.value = e.currentTarget.value.replace(/\D/g, '')
+                }}
+                title={`NIM hanya angka, maksimal ${NIM_MAX} digit`}
+                aria-describedby="nim-hint"
+                className="field font-normal"
+              />
+              <span id="nim-hint" className="text-xs font-normal text-muted">
+                Hanya angka. Pakai NIM yang sama di pre-test dan post-test supaya nilaimu bisa dibandingkan.
+              </span>
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              <span>Prodi</span>
+              <input name="prodi" required maxLength={100} placeholder="mis. S1 Informatika" className="field font-normal" />
+            </label>
+            {error && (
+              <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm text-danger">
+                {error}
+              </p>
+            )}
+            <button type="submit" disabled={busy} aria-busy={busy} className="btn btn-primary h-13 w-full text-base">
+              <PendingLabel pending={busy}>Masuk ujian</PendingLabel>
+            </button>
+            <p className="text-center text-sm text-muted">Layar penuh aktif setelah kamu menekan tombol ini.</p>
+          </form>
+        )}
+      </main>
+    </div>
+  )
+}
+
+function Stat({ value, label, accent = false }: Readonly<{ value: React.ReactNode; label: string; accent?: boolean }>) {
+  return (
+    <div className="flex flex-col-reverse rounded-xl border border-line bg-surface px-2.5 py-3">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className={`display text-[1.4rem] ${accent ? 'text-primary' : ''}`}>{value}</dd>
+    </div>
   )
 }
 
 const ICONS = {
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   bell: <path d="M8.7 3A6 6 0 0 1 18 8c0 3 .5 5 1.3 6.5M6 8c0 7-3 9-3 9h14M10.3 21a1.9 1.9 0 0 0 3.4 0M2 2l20 20" />,
-  screen: <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />,
-  alert: <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />,
+  megaphone: <><path d="M3 11l15-6v14L3 13z" /><path d="M18 9a3 3 0 0 1 0 6" /><path d="M7 13.5l1.5 5.5h3L10 14.6" /></>,
   globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
 }
 
 function Rule({ icon, children }: Readonly<{ icon: keyof typeof ICONS; children: React.ReactNode }>) {
   return (
     <li className="flex gap-3">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          {ICONS[icon]}
-        </svg>
-      </span>
-      <span className="pt-1.5 text-secondary">{children}</span>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="mt-0.5 shrink-0 text-navy-text">
+        {ICONS[icon]}
+      </svg>
+      <span>{children}</span>
     </li>
   )
 }

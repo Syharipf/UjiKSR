@@ -13,7 +13,7 @@ import ParticipantsTable from './participants-table'
 import SessionCharts from './session-charts'
 import SubmitButton from '@/app/submit-button'
 import QuestionForm from '../../question-form'
-import SessionForm from '../../session-form'
+import SessionForm, { type PreOption } from '../../session-form'
 import { AutoRefresh, Countdown } from './live'
 
 
@@ -44,7 +44,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
   if (!session) notFound()
 
   await finalizeExpired(id)
-  const [questions, attempts, violations, results] = await Promise.all([
+  const [questions, attempts, violations, results, preSessions] = await Promise.all([
     db().from('questions').select('*').eq('session_id', id).order('position').then(must) as Promise<Question[]>,
     db().from('attempts').select('*').eq('session_id', id).order('started_at').order('name').then(must) as Promise<Attempt[]>,
     db()
@@ -54,7 +54,10 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
       .order('created_at')
       .then(must) as Promise<Violation[]>,
     resultsStatus(session),
+    db().from('exam_sessions').select('id, title, held_on, code').eq('kind', 'pre').order('held_on', { ascending: false }).then(must) as Promise<PreOption[]>,
   ])
+  const sessionsById = new Map(preSessions.map((p) => [p.id, p]))
+  const preOptions = preSessions.filter((p) => p.id !== id)
   const locked = attempts.length > 0 || session.started_at !== null
   const working = attempts.filter((a) => !a.submitted_at).length
   // eslint-disable-next-line react-hooks/purity -- server component, rendered once per request
@@ -69,16 +72,36 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
   const link = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}/s/${session.code}`
   const qr = await QRCode.toDataURL(link, { width: 480, margin: 1 })
 
+  const pair = session.kind === 'post' && session.pre_session_id ? sessionsById.get(session.pre_session_id) : undefined
+  const hardest = questions
+    .map((q, i) => ({ q, i, stat: accuracy.get(q.id) }))
+    .filter((x) => x.stat && x.stat.percentage !== null)
+    .sort((a, b) => a.stat!.percentage! - b.stat!.percentage!)
+    .slice(0, 5)
+
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-4 pb-12">
-      <header className="pt-2">
-        <Link href="/admin" className="text-sm font-semibold text-muted hover:text-fg">
+    <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 pb-14 sm:px-6">
+      <header className="space-y-2.5">
+        <Link href="/admin" className="text-sm font-bold text-muted hover:text-fg">
           ← Semua sesi <LinkPending />
         </Link>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="min-w-0 text-2xl font-extrabold tracking-tight">{session.title}</h1>
-            <span className={`badge ${open ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>{lobby ? 'Lobi' : open ? 'Berjalan' : 'Ditutup'}</span>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0 space-y-2.5">
+            <h1 className="display text-[2.1rem]">{session.title}</h1>
+            <div className="flex flex-wrap gap-2 text-[0.8rem] font-bold">
+              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${open ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>
+                <span aria-hidden className={`size-2 rounded-full ${open ? 'bg-ok' : 'bg-muted'}`} />
+                {lobby ? 'Lobi' : open ? 'Berjalan' : 'Ditutup'}
+              </span>
+              <span className="rounded-full bg-subtle px-2.5 py-1 text-secondary">{session.kind === 'pre' ? 'Pre-test' : 'Post-test'}</span>
+              <span className="rounded-full bg-subtle px-2.5 py-1 text-secondary">{formatDate(session.held_on)}</span>
+              <span className="rounded-full bg-subtle px-2.5 py-1 text-secondary">kode {session.code}</span>
+              {pair && (
+                <Link href={`/admin/sessions/${pair.id}`} className="rounded-full bg-navy-soft px-2.5 py-1 text-navy hover:underline">
+                  Pasangan: {pair.title}
+                </Link>
+              )}
+            </div>
           </div>
           <form action={duplicateSession.bind(null, id)}>
             <SubmitButton confirm="Duplikat sesi ini beserta seluruh soalnya?" className="btn btn-secondary text-sm">
@@ -86,23 +109,43 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             </SubmitButton>
           </form>
         </div>
-        <p className="mt-1 text-sm text-muted">
-          {formatDate(session.held_on)} · {session.kind === 'pre' ? 'Pre-test' : 'Post-test'} · kode {session.code}
-        </p>
       </header>
 
       {/* Joins, answers, violations and the score release only happen while someone can still work. */}
       {(open || working > 0 || results.at !== null) && <AutoRefresh />}
-      {msg && (
-        <output className="block rounded-xl bg-warn-soft p-3 text-sm font-medium">{msg}</output>
-      )}
+      {msg && <output className="block rounded-xl bg-warn-soft p-3 text-sm font-medium">{msg}</output>}
 
-      <section className="card grid gap-5 p-4 sm:grid-cols-[220px_1fr] sm:p-6">
-        {/* eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize */}
-        <img src={qr} alt={`QR ${link}`} className="w-full rounded-xl bg-white p-2 ring-1 ring-line" />
-        <div className="space-y-3">
-          <h2 className="text-lg font-bold">Akses peserta</h2>
-          <p className="rounded-lg bg-subtle px-3 py-2 font-mono text-sm break-all">{link}</p>
+      <div className="flex flex-wrap gap-4">
+        <section aria-labelledby="kontrol" className="card flex min-w-0 flex-[1_1_380px] flex-col gap-4 p-5">
+          <h2 id="kontrol" className="display text-base">
+            Kontrol sesi
+          </h2>
+          <div className="flex items-center gap-5">
+            <div className="min-w-0 flex-1">
+              {open && session.started_at && !started ? (
+                <>
+                  <p className="text-sm text-muted">Soal muncul di HP peserta dalam</p>
+                  <Countdown until={Date.parse(session.started_at)} serverNow={serverNow} className="display block text-5xl" />
+                </>
+              ) : open && session.closes_at ? (
+                <>
+                  <p className="text-sm text-muted">Ujian berakhir dalam</p>
+                  <Countdown until={Date.parse(session.closes_at)} serverNow={serverNow} className="display block text-5xl" />
+                  <p className="mt-1.5 text-sm text-muted">Pukul {time(session.closes_at)} WIB, sama untuk semua peserta.</p>
+                </>
+              ) : lobby ? (
+                <>
+                  <p className="display text-5xl">{attempts.length}</p>
+                  <p className="mt-1.5 text-sm text-muted">peserta menunggu di lobi</p>
+                </>
+              ) : (
+                <p className="display text-3xl text-muted">Sesi ditutup</p>
+              )}
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize */}
+            <img src={qr} alt={`QR ${link}`} className="size-28 shrink-0 rounded-xl bg-white p-1.5 ring-1 ring-line" />
+          </div>
+          <p className="rounded-[10px] bg-subtle px-3 py-2 font-mono text-[0.8rem] break-all text-secondary">{link}</p>
           <p className={`font-semibold ${open ? 'text-ok' : 'text-muted'}`}>
             {lobby
               ? `Lobi dibuka — ${attempts.length} peserta menunggu. Klik "Mulai ujian" saat semua sudah masuk.`
@@ -112,17 +155,6 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                   ? 'Sesi ditutup otomatis — waktu ujian sudah habis.'
                   : 'Sesi ditutup — peserta belum bisa masuk.'}
           </p>
-          {open && session.started_at && !started && (
-            <p className="text-sm text-muted">
-              Soal muncul di HP peserta dalam <Countdown until={Date.parse(session.started_at)} serverNow={serverNow} />.
-            </p>
-          )}
-          {open && session.closes_at && (
-            <p className="text-sm text-muted">
-              Ujian berakhir dalam <Countdown until={Date.parse(session.closes_at)} serverNow={serverNow} /> (pukul {time(session.closes_at)} WIB), sama untuk semua
-              peserta.
-            </p>
-          )}
           <p className="text-sm text-muted">
             <ScoreStatus results={results} working={working} serverNow={serverNow} />
           </p>
@@ -134,19 +166,89 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                 </SubmitButton>
               </form>
             )}
+            <a href={`/admin/sessions/${id}/qr`} target="_blank" className="btn btn-navy">
+              Tayangkan QR &amp; kode
+            </a>
             <form action={setOpen.bind(null, id, !open)}>
               <SubmitButton className={`btn ${open ? 'btn-secondary' : 'btn-primary'}`}>{open ? 'Tutup sesi' : 'Buka sesi'}</SubmitButton>
             </form>
-            <a href={`/admin/sessions/${id}/qr`} target="_blank" className="btn btn-secondary">
-              Tayangkan QR &amp; kode
-            </a>
           </div>
-          <p className="text-xs text-muted">Untuk share screen atau proyektor, tayangkan halaman QR (tab baru), bukan halaman ini: daftar soal di bawah memuat kunci jawaban.</p>
+          <p className="text-xs text-muted">Untuk proyektor atau share screen, tayangkan halaman QR (tab baru), bukan halaman ini: daftar soal di bawah memuat kunci jawaban.</p>
+        </section>
+
+        <div className="flex min-w-0 flex-[2_1_520px] flex-col gap-4">
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <Tile label="Peserta masuk" value={attempts.length} />
+            <Tile label="Mengerjakan" value={working} />
+            <Tile label="Selesai" value={stats.submittedCount} />
+            <Tile label="Rata-rata" value={stats.avgScore ?? '–'} hint={stats.maxScore !== null ? `${stats.minScore}–${stats.maxScore}` : undefined} />
+            <Tile label="Pelanggaran" value={stats.totalViolations} tone={stats.totalViolations ? 'text-danger' : ''} />
+          </dl>
+          <section aria-labelledby="per-soal" className="card flex flex-1 flex-col gap-3.5 p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="per-soal" className="display text-[0.95rem]">
+                Jawaban benar per soal
+              </h2>
+              <span className="text-xs text-muted">terendah dulu</span>
+            </div>
+            {hardest.length ? (
+              hardest.map(({ q, i, stat }) => (
+                <div key={q.id} className="grid grid-cols-[minmax(0,1fr)_minmax(4rem,10rem)_2.75rem] items-center gap-3.5 text-sm" title={`${stat!.correct} dari ${stat!.answered} peserta menjawab benar`}>
+                  <span className="truncate">
+                    {i + 1}. {q.text}
+                  </span>
+                  <span aria-hidden className="h-2 overflow-hidden rounded bg-track">
+                    <span
+                      className={`block h-full rounded ${stat!.percentage! >= 70 ? 'bg-ok' : stat!.percentage! >= 40 ? 'bg-tier-4' : 'bg-danger'}`}
+                      style={{ width: `${stat!.percentage}%` }}
+                    />
+                  </span>
+                  <span className="text-right font-extrabold">{stat!.percentage}%</span>
+                </div>
+              ))
+            ) : (
+              <p className="m-auto py-4 text-center text-sm text-muted">Muncul setelah ada peserta yang menjawab.</p>
+            )}
+          </section>
         </div>
+      </div>
+
+      {attempts.length > 0 && (
+        <SessionCharts distribution={distribution} totalAttempts={attempts.length} workingCount={working} submittedCount={stats.submittedCount} />
+      )}
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="display text-lg">Peserta ({attempts.length})</h2>
+          <div className="flex flex-wrap gap-2">
+            {working > 0 && (
+              <form action={forceSubmitAll.bind(null, id)}>
+                <SubmitButton
+                  confirm={`Paksa kumpulkan ${working} peserta yang masih mengerjakan sekarang? Ujian mereka akan langsung diakhiri.`}
+                  className="btn btn-danger text-sm"
+                >
+                  Paksa kumpul ({working})
+                </SubmitButton>
+              </form>
+            )}
+            <a href={`/admin/sessions/${id}/export?format=xlsx`} className="btn btn-secondary text-sm">
+              Export Excel
+            </a>
+            <a href={`/admin/sessions/${id}/export?format=csv`} className="btn btn-secondary text-sm">
+              Export CSV
+            </a>
+            <form action={resetAllAttempts.bind(null, id)}>
+              <SubmitButton confirm="Hapus SEMUA peserta beserta jawabannya di sesi ini?" className="btn btn-danger text-sm">
+                Reset semua
+              </SubmitButton>
+            </form>
+          </div>
+        </div>
+        <ParticipantsTable sessionId={id} attempts={attempts} violations={violations} started={started} perQuestion={session.timer_mode === 'per_question'} />
       </section>
 
       <section className="card space-y-4 p-4 sm:p-6">
-        <h2 className="text-lg font-bold">Soal ({questions.length})</h2>
+        <h2 className="display text-lg">Soal ({questions.length})</h2>
         {locked && <p className="text-sm text-muted">Soal terkunci karena sudah ada peserta atau ujian sudah dimulai. Reset semua peserta untuk mengubah soal.</p>}
         <ol className="space-y-2">
           {questions.map((q, i) => {
@@ -163,7 +265,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                         stat.percentage >= 70
                           ? 'bg-ok-soft text-ok'
                           : stat.percentage >= 40
-                            ? 'bg-warn-soft text-amber-800 dark:text-amber-300'
+                            ? 'bg-warn-soft text-warn'
                             : 'bg-danger-soft text-danger'
                       }`}
                       title={`${stat.correct} dari ${stat.answered} peserta menjawab benar`}
@@ -243,11 +345,11 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
       </section>
 
       <section className="card p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-bold">Pengaturan</h2>
+        <h2 className="display mb-4 text-lg">Pengaturan</h2>
         {locked && (
           <p className="-mt-2 mb-4 text-sm text-muted">Mode timer, durasi, dan waktu per soal terkunci karena sudah ada peserta atau ujian sudah dimulai.</p>
         )}
-        <SessionForm action={updateSession.bind(null, id)} session={session} submitLabel="Simpan pengaturan" />
+        <SessionForm action={updateSession.bind(null, id)} session={session} submitLabel="Simpan pengaturan" preSessions={preOptions} />
         <form action={deleteSession.bind(null, id)} className="mt-6 border-t border-line pt-4">
           <SubmitButton
             confirm={`Hapus sesi "${session.title}" beserta ${questions.length} soal dan ${attempts.length} peserta? Tidak bisa dibatalkan.`}
@@ -258,71 +360,16 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
         </form>
       </section>
 
-      {attempts.length > 0 && (
-        <div className="space-y-4">
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <div className="card p-3 text-center">
-              <p className="text-xs text-muted">Rata-rata Nilai</p>
-              <p className="text-2xl font-extrabold text-primary">{stats.avgScore !== null ? stats.avgScore : '–'}</p>
-            </div>
-            <div className="card p-3 text-center">
-              <p className="text-xs text-muted">Nilai Tertinggi</p>
-              <p className="text-2xl font-extrabold text-ok">{stats.maxScore !== null ? stats.maxScore : '–'}</p>
-            </div>
-            <div className="card p-3 text-center">
-              <p className="text-xs text-muted">Nilai Terendah</p>
-              <p className="text-2xl font-extrabold text-secondary">{stats.minScore !== null ? stats.minScore : '–'}</p>
-            </div>
-            <div className="card p-3 text-center">
-              <p className="text-xs text-muted">Selesai</p>
-              <p className="text-2xl font-extrabold">{stats.submittedCount}/{stats.totalCount}</p>
-            </div>
-            <div className="card p-3 text-center col-span-2 sm:col-span-1">
-              <p className="text-xs text-muted">Total Pelanggaran</p>
-              <p className={`text-2xl font-extrabold ${stats.totalViolations ? 'text-danger' : 'text-muted'}`}>{stats.totalViolations}</p>
-            </div>
-          </section>
-          <SessionCharts
-            distribution={distribution}
-            totalAttempts={attempts.length}
-            workingCount={working}
-            submittedCount={stats.submittedCount}
-          />
-        </div>
-      )}
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-bold">Peserta ({attempts.length})</h2>
-          <div className="flex flex-wrap gap-2">
-            {working > 0 && (
-              <form action={forceSubmitAll.bind(null, id)}>
-                <SubmitButton
-                  confirm={`Paksa kumpulkan ${working} peserta yang masih mengerjakan sekarang? Ujian mereka akan langsung diakhiri.`}
-                  className="btn btn-secondary text-sm text-danger"
-                >
-                  Paksa kumpul ({working})
-                </SubmitButton>
-              </form>
-            )}
-            <a href={`/admin/sessions/${id}/export?format=xlsx`} className="btn btn-secondary text-sm">
-              Export Excel
-            </a>
-            <a href={`/admin/sessions/${id}/export?format=csv`} className="btn btn-secondary text-sm">
-              Export CSV
-            </a>
-            <form action={resetAllAttempts.bind(null, id)}>
-              <SubmitButton
-                confirm="Hapus SEMUA peserta beserta jawabannya di sesi ini?"
-                className="btn btn-danger text-sm"
-              >
-                Reset semua
-              </SubmitButton>
-            </form>
-          </div>
-        </div>
-        <ParticipantsTable sessionId={id} attempts={attempts} violations={violations} started={started} />
-      </section>
     </main>
+  )
+}
+
+function Tile({ label, value, hint, tone = '' }: Readonly<{ label: string; value: React.ReactNode; hint?: string; tone?: string }>) {
+  return (
+    <div className="card px-4 py-3.5">
+      <dt className="text-[0.8rem] text-muted">{label}</dt>
+      <dd className={`display mt-1 text-[1.9rem] ${tone}`}>{value}</dd>
+      {hint && <dd className="text-xs text-muted">rentang {hint}</dd>}
+    </div>
   )
 }

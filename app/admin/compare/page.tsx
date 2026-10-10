@@ -46,7 +46,7 @@ export default async function ComparePage(props: PageProps<'/admin/compare'>) {
         <Link href="/admin" className="text-sm font-semibold text-muted hover:text-fg">
           ← Semua sesi <LinkPending />
         </Link>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Bandingkan pre-test vs post-test</h1>
+        <h1 className="display mt-2 text-3xl">Bandingkan pre-test vs post-test</h1>
       </header>
 
       <Form action="/admin/compare" className="card grid items-end gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:p-6">
@@ -64,14 +64,14 @@ export default async function ComparePage(props: PageProps<'/admin/compare'>) {
               ['Peningkatan', result.avgDelta],
             ].map(([label, value]) => (
               <div key={label} className="card p-4">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</dt>
+                <dt className="text-xs font-semibold text-muted">{label}</dt>
                 <dd className="mt-1 text-2xl font-extrabold tabular-nums">{show(value as number | null)}</dd>
               </div>
             ))}
           </dl>
           <div className="card overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-muted">
+              <thead className="bg-subtle text-left text-xs text-muted">
                 <tr>
                   <th className="p-3">Nama</th>
                   <th className="p-3">NIM</th>

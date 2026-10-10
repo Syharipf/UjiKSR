@@ -70,7 +70,7 @@ const local = process.env.CODE ? null : await localSession()
 const code = process.env.CODE ?? local!.code
 console.log(`${N} participants → ${BASE} session ${code}\n`)
 
-const joins = await Promise.all(Array.from({ length: N }, (_, i) => api('/api/attempts', { code, name: `Beban ${i + 1}`, nim: `LOAD-${RUN}-${i + 1}`, prodi: 'Uji beban' })))
+const joins = await Promise.all(Array.from({ length: N }, (_, i) => api('/api/attempts', { code, name: `Beban ${i + 1}`, nim: `9${String(Date.now()).slice(-8)}${i + 1}`, prodi: 'Uji beban' })))
 report('join', joins)
 const ids = joins.filter((r) => r.ok).map((r) => r.data.id)
 

@@ -8,7 +8,9 @@ import ResultLink from './result-link'
 export default async function SessionPage(props: PageProps<'/s/[code]'>) {
   await connection() // open/closed state must be read on every request
   const code = decodeURIComponent((await props.params).code).trim().toUpperCase()
-  const session: Session | null = must(await db().from('exam_sessions').select('*').eq('code', code).maybeSingle())
+  const session: (Session & { questions: { count: number }[] }) | null = must(
+    await db().from('exam_sessions').select('*, questions(count)').eq('code', code).maybeSingle(),
+  )
   if (!session) return <Notice title="Sesi tidak ditemukan" body="Periksa lagi QR atau kode dari panitia." />
   if (!isOpen(session)) {
     return (
@@ -30,6 +32,7 @@ export default async function SessionPage(props: PageProps<'/s/[code]'>) {
         per_question_sec: session.per_question_sec,
         max_violations: session.max_violations,
       }}
+      total={session.questions[0]?.count ?? 0}
     />
   )
 }

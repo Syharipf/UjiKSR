@@ -8,52 +8,120 @@ import { createSession, logout } from './actions'
 import SessionForm from './session-form'
 import SetupError from './setup-error'
 
+type Row = Session & { attempts: { score: number | null }[] }
+
+// A post-test and the pre-test it is paired with sit together under the material's name.
+function group(sessions: Row[]) {
+  const byId = new Map(sessions.map((s) => [s.id, s]))
+  const used = new Set<string>()
+  const groups: { title: string; items: Row[]; pre?: string; post?: string }[] = []
+  for (const s of sessions) {
+    if (used.has(s.id)) continue
+    const pre = s.kind === 'post' && s.pre_session_id ? byId.get(s.pre_session_id) : undefined
+    if (pre && !used.has(pre.id)) {
+      used.add(s.id).add(pre.id)
+      groups.push({ title: s.title.replace(/^\s*post[- ]?test\s*[:\-–]?\s*/i, '') || s.title, items: [s, pre], pre: pre.id, post: s.id })
+    } else {
+      used.add(s.id)
+      groups.push({ title: '', items: [s] })
+    }
+  }
+  return groups
+}
+
+const average = (scores: (number | null)[]) => {
+  const xs = scores.filter((x): x is number => x !== null)
+  return xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toLocaleString('id-ID', { maximumFractionDigits: 1 }) : '–'
+}
+
 export default async function AdminHome() {
   await requireAdmin()
-  let sessions: Session[]
+  let sessions: Row[]
   try {
-    sessions = must(await db().from('exam_sessions').select('*').order('held_on', { ascending: false }).order('created_at', { ascending: false }))
+    sessions = must(
+      await db().from('exam_sessions').select('*, attempts(score)').order('held_on', { ascending: false }).order('created_at', { ascending: false }),
+    )
   } catch (error) {
     return <SetupError error={error} />
   }
+  const groups = group(sessions)
 
   return (
-    <main className="mx-auto max-w-4xl space-y-8 p-4 pb-12">
-      <header className="flex items-center justify-between gap-3 pt-2">
-        <h1 className="text-2xl font-extrabold tracking-tight">Sesi ujian</h1>
-        <form action={logout}>
-          <SubmitButton className="btn btn-secondary text-sm">Keluar</SubmitButton>
-        </form>
+    <main className="mx-auto max-w-6xl space-y-8 px-4 pt-7 pb-14 sm:px-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="display text-4xl">Sesi ujian</h1>
+        <div className="flex flex-wrap gap-2">
+          <a href="#buat-sesi" className="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Buat sesi baru
+          </a>
+          <form action={logout}>
+            <SubmitButton className="btn btn-secondary">Keluar</SubmitButton>
+          </form>
+        </div>
       </header>
 
-      <section className="space-y-3">
-        <ul className="card divide-y divide-line overflow-hidden">
-          {sessions.map((s) => (
-            <li key={s.id}>
-              <Link href={`/admin/sessions/${s.id}`} className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-subtle">
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold">{s.title}</span>
-                  <span className="text-sm text-muted">
-                    {formatDate(s.held_on)} · {s.kind === 'pre' ? 'Pre-test' : 'Post-test'} · kode <code className="font-semibold">{s.code}</code>
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <span className={`badge ${isOpen(s) ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>{isOpen(s) ? 'Dibuka' : 'Ditutup'}</span>
-                  <LinkPending />
-                </span>
-              </Link>
-            </li>
-          ))}
-          {!sessions.length && <li className="p-6 text-center text-muted">Belum ada sesi. Buat sesi pertama di bawah.</li>}
-        </ul>
-        <Link href="/admin/compare" className="btn btn-secondary text-sm">
-          Bandingkan pre-test vs post-test <LinkPending />
-        </Link>
-      </section>
+      {!sessions.length && <p className="card p-6 text-center text-muted">Belum ada sesi. Buat sesi pertama di bawah.</p>}
 
-      <section className="card p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-bold">Buat sesi baru</h2>
-        <SessionForm action={createSession} submitLabel="Buat sesi" />
+      <div className="space-y-7">
+        {groups.map((g) => (
+          <section key={g.items[0].id} className="space-y-2.5">
+            {g.title && (
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="display text-lg">{g.title}</h2>
+                <Link href={`/admin/compare?pre=${g.pre}&post=${g.post}`} className="text-sm font-bold text-navy-text hover:underline">
+                  Bandingkan pre-test dan post-test <LinkPending />
+                </Link>
+              </div>
+            )}
+            <ul className="card divide-y divide-line overflow-hidden">
+              {g.items.map((s) => {
+                const open = isOpen(s)
+                return (
+                  <li key={s.id}>
+                    <Link
+                      href={`/admin/sessions/${s.id}`}
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 p-4 transition-colors hover:bg-subtle sm:grid-cols-[6rem_minmax(0,1fr)_6.5rem_6.5rem_8rem] sm:px-5"
+                    >
+                      <span className={`hidden justify-self-start rounded-lg px-2.5 py-1 text-xs font-extrabold sm:inline ${s.kind === 'pre' ? 'bg-navy-soft text-navy' : 'bg-primary-soft text-danger'}`}>
+                        {s.kind === 'pre' ? 'Pre-test' : 'Post-test'}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-extrabold">{s.title}</span>
+                        <span className="mt-0.5 block text-sm text-muted">
+                          {formatDate(s.held_on)}, kode <b className="tracking-wider text-secondary">{s.code}</b>
+                        </span>
+                      </span>
+                      <span className="hidden text-sm text-muted sm:block">
+                        Peserta
+                        <b className="block text-lg text-fg">{s.attempts.length}</b>
+                      </span>
+                      <span className="hidden text-sm text-muted sm:block">
+                        Rata-rata
+                        <b className="block text-lg text-fg">{average(s.attempts.map((a) => a.score))}</b>
+                      </span>
+                      <span className="flex items-center justify-self-end gap-2">
+                        <span className={`badge ${open ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>{open ? (s.started_at ? 'Berjalan' : 'Lobi') : 'Ditutup'}</span>
+                        <LinkPending />
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <Link href="/admin/compare" className="btn btn-secondary text-sm">
+        Bandingkan pre-test vs post-test lainnya <LinkPending />
+      </Link>
+
+      <section id="buat-sesi" className="card scroll-mt-6 p-4 sm:p-6">
+        <h2 className="display mb-4 text-xl">Buat sesi baru</h2>
+        <SessionForm action={createSession} submitLabel="Buat sesi" preSessions={sessions.filter((s) => s.kind === 'pre').map(({ id, title, held_on, code }) => ({ id, title, held_on, code }))} />
       </section>
     </main>
   )

@@ -29,8 +29,9 @@ function apply(theme: Theme) {
   listeners.forEach((l) => l())
 }
 
+// `onBand` when it sits on the red mitela band.
 // Cycles Otomatis (follow device) → Terang → Gelap. `compact` shows only the icon.
-export default function ThemeToggle({ compact = false }: Readonly<{ compact?: boolean }>) {
+export default function ThemeToggle({ compact = false, onBand = false }: Readonly<{ compact?: boolean; onBand?: boolean }>) {
   const theme = useSyncExternalStore(subscribe, read, () => 'system' as Theme)
   return (
     <button
@@ -38,7 +39,9 @@ export default function ThemeToggle({ compact = false }: Readonly<{ compact?: bo
       onClick={() => apply(NEXT[theme])}
       aria-label={`Tema: ${LABEL[theme]}. Ketuk untuk ganti.`}
       title={`Tema: ${LABEL[theme]}`}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line-strong px-2.5 py-1 text-xs"
+      className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+        onBand ? 'border-on-band/40 hover:bg-on-band/10' : 'border-line-strong hover:bg-subtle'
+      }`}
     >
       <Icon theme={theme} />
       {!compact && LABEL[theme]}
