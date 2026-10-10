@@ -26,4 +26,4 @@ PGRST_DB_URI=postgres://postgres:postgres@127.0.0.1:5433/postgres PGRST_DB_SCHEM
   exec bun run start --port 3100) > .bin/next.log 2>&1 & PIDS+=($!)
 until curl -sf -o /dev/null http://localhost:3100/; do sleep 1; done
 
-bun e2e.ts
+bun "${1:-e2e.ts}"

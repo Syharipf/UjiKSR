@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "bun test",
-    "e2e": "bash e2e/run.sh"
+    "e2e": "bash e2e/run.sh",
+    "screenshots": "bash e2e/run.sh screenshots.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
