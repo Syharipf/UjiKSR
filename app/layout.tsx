@@ -21,8 +21,20 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://ujiksr.vercel.app'),
   title: 'UjiKSR',
   description: 'Pre-test dan post-test KSR PMI Unit Universitas Telkom',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: 'UjiKSR — KSR PMI Unit Universitas Telkom',
+    description: 'Sistem ujian CBT anti-cheat pre-test dan post-test KSR PMI Unit Universitas Telkom',
+    url: 'https://ujiksr.vercel.app',
+    siteName: 'UjiKSR',
+    locale: 'id_ID',
+    type: 'website',
+  },
   verification: { google: 'VzgwJR0IT679WZlL3qKO3qYhnjBjQr-xAH608PUysN4' }, // Google Search Console
 }
 
