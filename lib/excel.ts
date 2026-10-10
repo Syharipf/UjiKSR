@@ -74,8 +74,10 @@ export function parseQuestionsXlsx(bytes: Uint8Array): {
     const type = (normalized.type ?? '').trim()
     const question = (normalized.question ?? '').trim()
     const answer = (normalized.answer ?? '').trim()
-    const hasContent = type !== '' || question !== '' || answer !== '' || LETTERS.some((k) => (normalized[k] ?? '').trim() !== '')
-    if (!hasContent) return
+    const hasAnyOption = LETTERS.some((k) => (normalized[k] ?? '').trim() !== '')
+
+    // Skip completely empty rows and trailing placeholder rows where only type is set
+    if (!question && !answer && !hasAnyOption) return
 
     const q = toQuestion({
       type,

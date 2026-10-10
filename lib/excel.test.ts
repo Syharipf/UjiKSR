@@ -141,4 +141,21 @@ describe('parseQuestionsXlsx', () => {
       answer_index: 1,
     })
   })
+
+  it('ignores trailing placeholder rows where only type is filled', () => {
+    const rows = [
+      { type: 'pg', question: 'Soal 1', a: 'A', b: 'B', c: '', d: '', e: '', answer: 'A' },
+      { type: 'pg', question: '', a: '', b: '', c: '', d: '', e: '', answer: '' },
+      { type: 'pg', question: '', a: '', b: '', c: '', d: '', e: '', answer: '' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Soal')
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    const { questions, errors } = parseQuestionsXlsx(new Uint8Array(buf))
+
+    expect(errors).toEqual([])
+    expect(questions.length).toBe(1)
+    expect(questions[0].text).toBe('Soal 1')
+  })
 })

@@ -51,7 +51,14 @@ export function parseQuestionsCsv(csv: string) {
 
   data.forEach((row, i) => {
     const cell = (key: string) => row[key] ?? ''
-    const q = toQuestion({ type: cell('type'), text: cell('question'), options: LETTERS.map(cell), answer: cell('answer') })
+    const text = cell('question').trim()
+    const answer = cell('answer').trim()
+    const hasAnyOption = LETTERS.some((k) => cell(k).trim() !== '')
+
+    // Skip completely empty rows and trailing placeholder rows where only type is set
+    if (!text && !answer && !hasAnyOption) return
+
+    const q = toQuestion({ type: cell('type'), text, options: LETTERS.map(cell), answer })
     if (typeof q === 'string') errors.push(`Baris ${i + 2}: ${q}`)
     else questions.push({ position: questions.length, ...q })
   })
