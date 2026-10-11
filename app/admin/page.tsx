@@ -3,20 +3,13 @@ import LinkPending from '@/app/link-pending'
 import SubmitButton from '@/app/submit-button'
 import { requireAdmin } from '@/lib/admin-auth'
 import { db, must } from '@/lib/db'
-import { formatDate, isOpen, type Session } from '@/lib/exam'
+import { cleanTopic, formatDate, isOpen, type Session } from '@/lib/exam'
 import { createSession, logout } from './actions'
 import SessionForm from './session-form'
 import SetupError from './setup-error'
 
 type Row = Session & { attempts: { score: number | null }[] }
 
-// Normalize session title by removing common pre/post test prefixes/suffixes
-function cleanTitle(title: string): string {
-  return title
-    .replace(/^\s*(?:pre[- ]?test|post[- ]?test)\s*[:\-–]?\s*/i, '')
-    .replace(/\s*[:\-–]?\s*(?:pre[- ]?test|post[- ]?test)\s*$/i, '')
-    .trim()
-}
 
 // A post-test and pre-test that are paired (via pre_session_id or matching title) sit together under a shared header.
 function group(sessions: Row[]) {
@@ -30,7 +23,7 @@ function group(sessions: Row[]) {
     const pre = s.kind === 'post' && s.pre_session_id ? byId.get(s.pre_session_id) : undefined
     if (pre && !used.has(pre.id)) {
       used.add(s.id).add(pre.id)
-      const title = cleanTitle(s.title) || cleanTitle(pre.title) || s.title
+      const title = cleanTopic(s.title) || cleanTopic(pre.title) || s.title
       groups.push({ title, items: [s, pre], pre: pre.id, post: s.id })
     }
   }
@@ -38,11 +31,11 @@ function group(sessions: Row[]) {
   // 2. Group pre-test and post-test that share the exact cleaned topic/title
   for (const s of sessions) {
     if (used.has(s.id)) continue
-    const topic = cleanTitle(s.title)
+    const topic = cleanTopic(s.title)
     if (topic) {
       // find counterpart with same cleaned topic
       const counterpart = sessions.find(
-        (other) => !used.has(other.id) && other.id !== s.id && other.kind !== s.kind && cleanTitle(other.title).toLowerCase() === topic.toLowerCase(),
+        (other) => !used.has(other.id) && other.id !== s.id && other.kind !== s.kind && cleanTopic(other.title).toLowerCase() === topic.toLowerCase(),
       )
       if (counterpart) {
         used.add(s.id).add(counterpart.id)

@@ -37,6 +37,13 @@ export const START_DELAY_MS = 2 * LOBBY_POLL_MS + 1000
 // '2026-09-27' → '27 Sep 2026'. A bare date parses as UTC midnight, so format in UTC.
 export const formatDate = (ymd: string) => new Date(ymd).toLocaleDateString('id-ID', { dateStyle: 'medium', timeZone: 'UTC' })
 
+// Clean title for automatic topic pairing (e.g., 'Pre-test Pertolongan Pertama' -> 'Pertolongan Pertama')
+export function cleanTopic(title: string): string {
+  return title
+    .replace(/^\s*(?:pre[- ]?test|post[- ]?test)\s*[:\-–]?\s*/i, '')
+    .replace(/\s*[:\-–]?\s*(?:pre[- ]?test|post[- ]?test)\s*$/i, '')
+    .trim()
+}
 // ms → 'm:ss', rounding up so a countdown shows 0:00 only when time is really up.
 export const clock = (ms: number) => {
   const s = Math.ceil(ms / 1000)

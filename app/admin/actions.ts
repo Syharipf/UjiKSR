@@ -9,7 +9,7 @@ import { parseQuestionsCsv, toQuestion } from '@/lib/csv'
 import { parseQuestionsXlsx } from '@/lib/excel'
 import { finishRound, forceSubmitAll as attemptsForceSubmitAll, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
-import { deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
+import { cleanTopic, deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
 const back = (id: string, msg: string) => redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}`)
 
@@ -86,6 +86,21 @@ async function checkPair(preId: string | null, selfId?: string) {
 export async function createSession(formData: FormData) {
   await requireAdmin()
   const fields = sessionFields(formData)
+
+  // If post-test has no explicit pre_session_id chosen, try to auto-pair with pre-test having matching title
+  if (fields.kind === 'post' && !fields.pre_session_id) {
+    const topic = cleanTopic(fields.title).toLowerCase()
+    if (topic) {
+      const candidates: Pick<Session, 'id' | 'title' | 'held_on'>[] = must(
+        await db().from('exam_sessions').select('id, title, held_on').eq('kind', 'pre').order('created_at', { ascending: false }),
+      )
+      const matched = candidates.find((c) => cleanTopic(c.title).toLowerCase() === topic)
+      if (matched) {
+        fields.pre_session_id = matched.id
+      }
+    }
+  }
+
   await checkPair(fields.pre_session_id ?? null)
   for (let i = 0; i < 5; i++) {
     const { data, error } = await db().from('exam_sessions').insert({ ...fields, code: newCode() }).select('id').single()
@@ -108,6 +123,21 @@ export async function createSession(formData: FormData) {
 export async function updateSession(id: string, formData: FormData) {
   await requireAdmin()
   const fields = sessionFields(formData)
+
+  // If post-test has no explicit pre_session_id chosen, try to auto-pair with pre-test having matching title
+  if (fields.kind === 'post' && !fields.pre_session_id) {
+    const topic = cleanTopic(fields.title).toLowerCase()
+    if (topic) {
+      const candidates: Pick<Session, 'id' | 'title' | 'held_on'>[] = must(
+        await db().from('exam_sessions').select('id, title, held_on').eq('kind', 'pre').neq('id', id).order('created_at', { ascending: false }),
+      )
+      const matched = candidates.find((c) => cleanTopic(c.title).toLowerCase() === topic)
+      if (matched) {
+        fields.pre_session_id = matched.id
+      }
+    }
+  }
+
   await checkPair(fields.pre_session_id ?? null, id)
   // The shared clock and attempts use the current settings (deadlines, per-question order);
   // changing them underneath would move deadlines or let per-question takers go back.
