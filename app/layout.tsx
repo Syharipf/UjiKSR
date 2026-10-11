@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import Script from 'next/script'
+import { Analytics } from '@vercel/analytics/next'
 import { themeScript } from '@/lib/theme'
 import './globals.css'
 
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           Browser ini terlalu lama, ujian mungkin tidak berjalan. Perbarui Chrome/Safari, atau pakai HP lain.
         </p>
         {children}
+        <Analytics />
       </body>
     </html>
   )
