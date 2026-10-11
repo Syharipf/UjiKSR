@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { themeScript } from '@/lib/theme'
 import './globals.css'
 
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         </p>
         {children}
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
