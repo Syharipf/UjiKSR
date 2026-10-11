@@ -120,11 +120,18 @@ export default function ExamClient({ id }: { id: string }) {
   const onError = useCallback((e: ApiError) => {
     if (e.status === 404) {
       forget(id)
+      exitFullscreen()
       setFatal(e)
     } else setNotice(e.message)
   }, [id])
 
-  const refresh = useCallback(() => call(base).then(apply, onError), [base, apply, onError])
+  const refresh = useCallback(
+    () =>
+      call(base).then(apply, (e: ApiError) => {
+        onError(e)
+      }),
+    [base, apply, onError],
+  )
 
   const lastViolationRef = useRef(0)
   const reportViolation = useCallback(
@@ -203,7 +210,16 @@ export default function ExamClient({ id }: { id: string }) {
   useResultChecks(view, offset, refresh)
   useStartChecks(view, offset, refresh)
 
-  if (fatal) return <Notice title="Tidak bisa membuka ujian" body={fatal.message} />
+  if (fatal)
+    return (
+      <Notice title="Ujian Telah Direset" body={fatal.message}>
+        <div className="mt-4 flex flex-col gap-2">
+          <Link href="/" className="btn btn-primary w-full">
+            Kembali ke Halaman Masuk
+          </Link>
+        </div>
+      </Notice>
+    )
   if (!view) return <Notice title="Memuat ujian…" />
   if (view.status === 'submitted') return <Submitted id={id} view={view} offset={offset} />
   if (view.status === 'waiting') return <Waiting view={view} offset={offset} onRefresh={refresh} />
@@ -220,7 +236,9 @@ export default function ExamClient({ id }: { id: string }) {
       (e: ApiError) => {
         pending.current--
         onError(e)
-        refresh()
+        if (e.status !== 404) {
+          refresh()
+        }
       },
     )
     queue.current = run
