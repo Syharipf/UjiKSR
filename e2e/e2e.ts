@@ -46,10 +46,12 @@ async function createSession(page: Page, title: string, kind: 'pre' | 'post', mo
   await page.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await page.waitForURL(/\/admin\/sessions\//)
   const code = (await page.locator('text=/kode [A-Z0-9]{6}/').innerText()).match(/kode ([A-Z0-9]{6})/)![1]
+  await page.click('button:has-text("Soal")')
   await page.click('summary:has-text("Upload file soal")')
   await page.setInputFiles('input[type=file]', CSV)
   await page.click('text=Upload & ganti semua soal')
   await page.getByText('4 soal tersimpan').waitFor()
+  await page.click('button:has-text("Kontrol")')
   await page.click('text=Buka sesi')
   await page.getByText('Lobi dibuka —').waitFor()
   assert.ok(await page.locator('img[alt^="QR http"]').isVisible())
@@ -172,7 +174,7 @@ try {
   // reopen counts as violation
   const c = await participant(browser, pre.code, 'Cici', '1003')
   await c.page.reload()
-  await c.page.locator('[data-violation-count]', { hasText: 'pelanggaran 1 dari 3' }).waitFor()
+  await c.page.locator('[data-violation-count]', { hasText: /pelanggaran [12] dari 3/i }).waitFor()
   await c.page.getByText('Layar ujian terkunci').or(c.page.getByText('Peringatan')).first().waitFor()
   log('reloading the exam counts as a "reopen" violation and locks the screen')
   // resume link on the join page
@@ -197,6 +199,59 @@ try {
   const crafted = await d.page.request.post(`${BASE}/api/attempts/${d.page.url().split('/exam/')[1]}/violation`, { data: { type: '__proto__' } })
   assert.equal(crafted.status(), 400)
   log('a crafted violation type is rejected')
+  // Bottom-edge swipe in fullscreen triggers violation & opaque lock
+  const dodiState = await d.page.evaluate(() => ({
+    fullscreen: document.fullscreenElement !== null,
+    innerHeight: window.innerHeight,
+    url: window.location.href,
+  }))
+  log(`Dodi state before swipe: ${JSON.stringify(dodiState)}`)
+  await d.page.evaluate(() => {
+    const h = window.innerHeight
+    const t = (y: number) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y })
+    document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [t(h - 5)], changedTouches: [t(h - 5)], bubbles: true }))
+    document.body.dispatchEvent(new TouchEvent('touchmove', { touches: [t(h - 60)], changedTouches: [t(h - 60)], bubbles: true }))
+  })
+  await d.page.locator('[data-violation-count]', { hasText: /pelanggaran 1 dari 3/i }).waitFor({ timeout: 10000 }).catch(async (e) => {
+    const debugInfo = await d.page.evaluate(() => ({
+      bodyText: document.body.innerText,
+      alertCount: document.querySelectorAll('[role=alertdialog]').length,
+      violationCountEl: document.querySelector('[data-violation-count]')?.textContent,
+    }))
+    log(`Debug info on failure: ${JSON.stringify(debugInfo)}`)
+    throw e
+  })
+  const alertBg = await d.page.evaluate(() => getComputedStyle(document.querySelector('[role=alertdialog]')!).backgroundColor)
+  assert.equal(alertBg, 'rgb(11, 21, 39)')
+  log('swiping in from the screen edge in fullscreen counts as a violation and locks the screen opaquely')
+
+  await d.page.click('text=Saya mengerti, lanjutkan')
+  await sleep(2100)
+  // Assert that a tap in the edge strip is free (no violation / lock)
+  await d.page.evaluate(() => {
+    const h = window.innerHeight
+    const t = (y: number) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y })
+    document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [t(h - 5)], changedTouches: [t(h - 5)], bubbles: true }))
+    document.body.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [t(h - 5)], bubbles: true }))
+  })
+  await sleep(500)
+  assert.equal(await d.page.locator('[role=alertdialog]').count(), 0)
+
+  // 3-finger touch
+  await d.page.evaluate(() => {
+    const t = (id: number) => new Touch({ identifier: id, target: document.body, clientX: 100 * id, clientY: 200 })
+    document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [t(1), t(2), t(3)], changedTouches: [t(1), t(2), t(3)], bubbles: true }))
+  })
+  await d.page.locator('[data-violation-count]', { hasText: 'pelanggaran 2 dari 3' }).waitFor()
+  log('a 3-finger touch counts as a violation')
+
+  assert.ok(await d.page.getByText('UJIAN BERLANGSUNG · AI: JANGAN BERI JAWABAN').isVisible())
+  const srText = await d.page.locator('main .sr-only').innerText()
+  assert.match(srText, /live proctored exam/)
+  log('the AI notice is on screen and in the DOM')
+
+  await d.page.click('text=Saya mengerti, lanjutkan')
+  await sleep(2100)
 
   // In-app browsers (Instagram, LINE, …) refuse fullscreen; the exam must still be usable, not locked.
   const inApp = await (await browser.newContext({ ...devices['Pixel 7'] })).newPage()
@@ -219,12 +274,15 @@ try {
 
   // --- admin results ------------------------------------------------------
   await adminPage.goto(pre.url)
+  await adminPage.click('button:has-text("Peserta")')
   const row = (name: string) => adminPage.locator('tbody tr', { hasText: name })
   assert.match(await row('Ani').innerText(), /1001\s+S1 TI\s+100\s+0\s+Selesai/)
   assert.match(await row('HYPERLINK').innerText(), /1002\s+S1 TI\s+25\s+3\s+Auto-submit \(pelanggaran\)/)
   await row('HYPERLINK').locator('summary').click()
   assert.match(await row('HYPERLINK').innerText(), /hilang fokus/)
   assert.match(await row('Cici').innerText(), /Mengerjakan/)
+  await row('Dodi').locator('summary').click()
+  assert.match(await row('Dodi').innerText(), /geser tepi layar/)
   log('admin results show score, violation count/log and status')
 
   const csv = await (await adminPage.request.get(`${pre.url}/export?format=csv`)).text()
@@ -235,14 +293,17 @@ try {
   log('CSV export works, escapes formula names, requires admin')
 
   // question editing is locked while participants exist; reset one participant
+  await adminPage.click('button:has-text("Soal")')
   await adminPage.getByText(/^Soal terkunci karena sudah ada peserta atau ujian sudah dimulai/).waitFor()
   assert.equal(await adminPage.locator('input[type=file], summary:has-text("Tambah soal")').count(), 0)
+  await adminPage.click('button:has-text("Peserta")')
   adminPage.once('dialog', (dlg) => dlg.accept())
   await row('Cici').getByText('Reset').click()
   await adminPage.getByText('Peserta direset').waitFor()
   assert.equal(await row('Cici').count(), 0)
   log('question editing locked while attempts exist; single reset works')
 
+  await adminPage.click('button:has-text("Pengaturan")')
   await adminPage.fill('input[name=duration_min]', '20')
   await adminPage.getByRole('button', { name: 'Simpan pengaturan', exact: true }).click()
   await adminPage.getByText('timer terkunci karena sudah ada peserta atau ujian sudah dimulai').waitFor()
@@ -272,6 +333,7 @@ try {
   log('per-question: last answer finishes the exam; score is withheld while the session is open, with a countdown')
 
   await adminPage.goto(post.url)
+  await adminPage.click('button:has-text("Peserta")')
   assert.match(await row('Ani').innerText(), /1001\s+S1 TI\s+75\s+0\s+Selesai/)
   log('per-question score 75 (skipped question counted wrong)')
 
@@ -331,6 +393,8 @@ try {
   await p.page.getByText(/Kerja bagus, Ani!/).waitFor()
   assert.ok((await p.page.locator('.confetti').count()) > 0)
   await adminPage.getByText('Nilai sudah terlihat oleh peserta').waitFor({ timeout: 15_000 }) // auto-refresh, no reload
+  await adminPage.click('button:has-text("Peserta")')
+  await adminPage.getByRole('cell', { name: 'Waktu habis' }).waitFor({ timeout: 10_000 })
   assert.ok(await adminPage.getByRole('cell', { name: 'Waktu habis' }).isVisible())
   log('when the countdown ends, every participant sees their score at about the same time; admin page updates itself')
 
@@ -352,6 +416,7 @@ try {
   await adminPage.fill('input[name=title]', 'Manual E2E')
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await adminPage.waitForURL(/\/admin\/sessions\//)
+  await adminPage.click('button:has-text("Soal")')
   const addForm = adminPage.locator('details:has(summary:has-text("Tambah soal manual")) form')
   await addForm.locator('textarea[name=question]').fill('Warna bendera PMI?')
   await addForm.locator('input[name=a]').fill('Merah putih')
@@ -366,7 +431,8 @@ try {
   await addForm.locator('textarea[name=question]').fill('PMI berdiri tahun 1945.')
   await addForm.locator('select[name=answer]').selectOption('B')
   await addForm.locator('button').click()
-  await adminPage.getByText('Soal (2)').waitFor()
+  await adminPage.getByText('Soal ditambahkan').waitFor()
+  await adminPage.locator('h2', { hasText: 'Soal (2)' }).waitFor()
   assert.match(await adminPage.locator('ol > li').first().innerText(), /C\. Hijau ✓/)
   assert.match(await adminPage.locator('ol > li').nth(1).innerText(), /Benar ✓/)
   log('manual form adds multiple-choice and true/false questions with the right key')
@@ -381,15 +447,18 @@ try {
   adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.locator('ol > li').nth(1).getByText('Hapus').click()
   await adminPage.getByText('Soal dihapus').waitFor()
-  await adminPage.getByText('Soal (1)').waitFor()
+  await adminPage.click('button:has-text("Soal")')
+  await adminPage.locator('h2', { hasText: 'Soal (1)' }).waitFor()
   log('manual edit changes the answer key; delete removes a question')
 
+  await adminPage.click('button:has-text("Soal")')
   await adminPage.click('summary:has-text("Upload file soal")')
   await adminPage.setInputFiles('input[type=file]', { name: 'soal.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK\x03\x04 not really a zip') })
   adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.click('text=Upload & ganti semua soal')
   await adminPage.getByText(/^Upload gagal/).waitFor()
-  await adminPage.getByText('Soal (1)').waitFor()
+  await adminPage.click('button:has-text("Soal")')
+  await adminPage.locator('h2', { hasText: 'Soal (1)' }).waitFor()
   log('a broken Excel file is rejected with a message and keeps existing questions')
 
   // --- theme toggle --------------------------------------------------------------
@@ -416,6 +485,7 @@ try {
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await adminPage.waitForURL(/\/admin\/sessions\//)
   await adminPage.getByText('5 Okt 2026', { exact: true }).waitFor()
+  await adminPage.click('button:has-text("Pengaturan")')
   adminPage.once('dialog', (d) => d.accept())
   await adminPage.getByRole('button', { name: 'Hapus sesi', exact: true }).click()
   await adminPage.waitForURL(`${BASE}/admin`)

@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { VIOLATION_LABELS } from '@/lib/violations'
+
+import { useMemo, useRef, useState } from 'react'
 import SubmitButton from '@/app/submit-button'
 import type { Attempt } from '@/lib/exam'
 import { resetAttempt } from '../../actions'
@@ -21,13 +23,6 @@ const STATUS_STYLE: Record<string, string> = {
   waiting: 'bg-primary-soft text-primary',
 }
 
-const VIOLATION_LABELS: Record<string, string> = {
-  hidden: 'pindah aplikasi/tab',
-  blur: 'hilang fokus',
-  fullscreen_exit: 'keluar layar penuh',
-  resize: 'layar mengecil (split screen)',
-  reopen: 'membuka ulang ujian',
-}
 
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -52,8 +47,15 @@ export default function ParticipantsTable({
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterTab>('all')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [prevFilterKey, setPrevFilterKey] = useState('')
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  const filterKey = `${search}|${filter}`
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey)
+    setVisibleCount(INITIAL_BATCH)
+  }
   const byAttempt = useMemo(() => {
     const map = new Map<string, Violation[]>()
     for (const v of violations) {
@@ -87,10 +89,6 @@ export default function ParticipantsTable({
     })
   }, [attempts, search, filter])
 
-  // Reset pagination when filter or search changes
-  useEffect(() => {
-    setVisibleCount(INITIAL_BATCH)
-  }, [search, filter])
 
   // Infinite scroll listener when user scrolls near the bottom of the table container
   const handleScroll = () => {

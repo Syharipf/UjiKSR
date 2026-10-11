@@ -8,6 +8,9 @@ const DEBOUNCE_MS = 2000
 // Split screen roughly halves the viewport; rotating the phone keeps the area about the same.
 const MIN_AREA_RATIO = 0.6
 const BLOCKED = ['contextmenu', 'copy', 'cut', 'selectstart', 'dragstart'] as const
+// Android's system-bar reveal swipe starts within ~24dp of the edge (system_gestures_start_threshold).
+const EDGE_PX = 24
+const EDGE_TRAVEL_PX = 24
 
 // `awake`: hold the screen on (also while waiting in the lobby, so the phone is unlocked when the questions appear).
 export function useAntiCheat(active: boolean, onViolation: (type: string) => void, awake = active) {
@@ -65,8 +68,61 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
         report('blur')
       }
     }
+    // In fullscreen the system bars are hidden, and a swipe in from the top or bottom edge brings
+    // them back (notification shade; navbar -> hold Home -> Circle to Search/Lens/Gemini).
+    // Firefox/Samsung give the page no blur for those overlays, so the swipe is the only signal.
+    // Only check this in real fullscreen; anywhere else the screen edge is ordinary page content.
+    let edge: { id: number; y: number; dir: 1 | -1 } | null = null
 
-    const listeners: [EventTarget, string, EventListener][] = [
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 3) {
+        edge = null
+        report('multi_touch')
+        return
+      }
+      if (e.touches.length !== 1 || !document.fullscreenElement) {
+        edge = null
+        return
+      }
+      const t = e.touches[0]
+      const h = window.innerHeight
+      if (t.clientY <= EDGE_PX) {
+        edge = { id: t.identifier, y: t.clientY, dir: 1 }
+      } else if (t.clientY >= h - EDGE_PX) {
+        edge = { id: t.identifier, y: t.clientY, dir: -1 }
+      } else {
+        edge = null
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!edge) return
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i]
+        if (t.identifier === edge.id) {
+          if ((t.clientY - edge.y) * edge.dir >= EDGE_TRAVEL_PX) {
+            edge = null
+            report('edge_swipe')
+          }
+          break
+        }
+      }
+    }
+
+    const onTouchCancel = () => {
+      if (edge) {
+        edge = null
+        report('edge_swipe')
+      }
+    }
+
+    const onTouchEnd = () => {
+      edge = null
+    }
+
+    type ListenerEntry = [EventTarget, string, EventListener, AddEventListenerOptions?]
+
+    const listeners: ListenerEntry[] = [
       [document, 'visibilitychange', (() => document.visibilityState === 'hidden' && report('hidden')) as EventListener],
       [window, 'blur', (() => report('blur')) as EventListener],
       [window, 'focusout', (() => checkFocus()) as EventListener],
@@ -80,15 +136,18 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
           if (area < maxArea * MIN_AREA_RATIO) report('resize')
         }) as EventListener,
       ],
+      [document, 'touchstart', onTouchStart as EventListener, { passive: true }],
+      [document, 'touchmove', onTouchMove as EventListener, { passive: true }],
+      [document, 'touchcancel', onTouchCancel as EventListener, { passive: true }],
+      [document, 'touchend', onTouchEnd as EventListener, { passive: true }],
     ]
-    listeners.forEach(([target, type, fn]) => target.addEventListener(type, fn))
-
+    listeners.forEach(([target, type, fn, opts]) => target.addEventListener(type, fn, opts))
     // Active polling for document.hasFocus() to catch notification shade dragging & floating overlays
     const focusInterval = setInterval(checkFocus, 350)
 
     return () => {
       clearInterval(focusInterval)
-      listeners.forEach(([target, type, fn]) => target.removeEventListener(type, fn))
+      listeners.forEach(([target, type, fn, opts]) => target.removeEventListener(type, fn, opts))
     }
   }, [active, onViolation])
 }

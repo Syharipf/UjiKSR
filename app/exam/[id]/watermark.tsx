@@ -1,11 +1,18 @@
 // Tiled name + NIM over the whole exam so a leaked photo identifies its source.
 // Two tints: dark text on the light theme, light text on the dark theme, so it stays visible in both.
+import { AI_NOTICE_SHORT } from './ai-notice'
+
 export default function Watermark({ text }: { text: string }) {
-  const safe = text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+  const safe = esc(text)
+  const noticeSafe = esc(AI_NOTICE_SHORT)
   const tile = (fill: string) =>
     `url("data:image/svg+xml,${encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' width='260' height='140'>` +
-        `<text x='20' y='80' transform='rotate(-25 130 70)' font-family='sans-serif' font-size='16' fill='${fill}'>${safe}</text></svg>`,
+      `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='170'>` +
+        `<g transform='rotate(-25 150 85)'>` +
+        `<text x='20' y='80' font-family='sans-serif' font-size='16' fill='${fill}'>${safe}</text>` +
+        `<text x='20' y='104' font-family='sans-serif' font-size='12' fill='${fill}'>${noticeSafe}</text>` +
+        `</g></svg>`,
     )}")`
   return (
     <>

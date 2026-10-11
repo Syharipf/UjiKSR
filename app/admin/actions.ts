@@ -11,7 +11,8 @@ import { finishRound, forceSubmitAll as attemptsForceSubmitAll, UUID } from '@/l
 import { db, must } from '@/lib/db'
 import { cleanTopic, deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
-const back = (id: string, msg: string) => redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}`)
+const back = (id: string, msg: string, tab?: string) =>
+  redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}${tab ? `&tab=${tab}` : ''}`)
 
 export async function login(formData: FormData) {
   if (!process.env.ADMIN_PASSWORD) {
@@ -162,7 +163,7 @@ export async function updateSession(id: string, formData: FormData) {
       throw error
     }
   }
-  back(id, 'Pengaturan tersimpan')
+  back(id, 'Pengaturan tersimpan', 'pengaturan')
 }
 
 type TimerRow = Pick<Session, TimerField | 'is_open' | 'closes_at' | 'started_at'> & { questions: { count: number }[] }
@@ -246,7 +247,7 @@ export async function uploadQuestions(id: string, formData: FormData) {
 
   must(await db().from('questions').delete().eq('session_id', id))
   must(await db().from('questions').insert(questions.map((q) => ({ ...q, session_id: id }))))
-  back(id, `${questions.length} soal tersimpan`)
+  back(id, `${questions.length} soal tersimpan`, 'soal')
 }
 
 // Add (questionId null) or edit one question from the manual form.
@@ -257,31 +258,31 @@ export async function saveQuestion(sessionId: string, questionId: string | null,
     return typeof value === 'string' ? value : ''
   }
   const q = toQuestion({ type: field('type'), text: field('question'), options: ['a', 'b', 'c', 'd', 'e'].map(field), answer: field('answer') })
-  if (typeof q === 'string') return back(sessionId, `Soal belum tersimpan — ${q}`)
-  if (await isLocked(sessionId)) return back(sessionId, LOCKED)
+  if (typeof q === 'string') return back(sessionId, `Soal belum tersimpan — ${q}`, 'soal')
+  if (await isLocked(sessionId)) return back(sessionId, LOCKED, 'soal')
 
   if (questionId) {
     must(await db().from('questions').update(q).eq('id', questionId).eq('session_id', sessionId))
-    return back(sessionId, 'Soal diperbarui')
+    return back(sessionId, 'Soal diperbarui', 'soal')
   }
   const last: { position: number } | null = must(
     await db().from('questions').select('position').eq('session_id', sessionId).order('position', { ascending: false }).limit(1).maybeSingle(),
   )
   must(await db().from('questions').insert({ ...q, session_id: sessionId, position: (last?.position ?? -1) + 1 }))
-  back(sessionId, 'Soal ditambahkan')
+  back(sessionId, 'Soal ditambahkan', 'soal')
 }
 
 export async function deleteQuestion(sessionId: string, questionId: string) {
   await requireAdmin()
-  if (await isLocked(sessionId)) return back(sessionId, LOCKED)
+  if (await isLocked(sessionId)) return back(sessionId, LOCKED, 'soal')
   must(await db().from('questions').delete().eq('id', questionId).eq('session_id', sessionId))
-  back(sessionId, 'Soal dihapus')
+  back(sessionId, 'Soal dihapus', 'soal')
 }
 
 export async function resetAttempt(sessionId: string, attemptId: string) {
   await requireAdmin()
   must(await db().from('attempts').delete().eq('id', attemptId).eq('session_id', sessionId))
-  back(sessionId, 'Peserta direset dan bisa mulai ulang')
+  back(sessionId, 'Peserta direset dan bisa mulai ulang', 'peserta')
 }
 
 export async function resetAllAttempts(sessionId: string) {

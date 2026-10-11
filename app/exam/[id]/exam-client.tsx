@@ -11,6 +11,7 @@ import ThemeToggle from '@/app/theme-toggle'
 import { clock, GRACE_MS, LOBBY_POLL_MS, type ExamView, type PublicQuestion } from '@/lib/exam'
 import { enterFullscreen, exitFullscreen, isFullscreen, subscribeFullscreen } from '@/lib/fullscreen'
 import Confetti from './confetti'
+import { AI_NOTICE_FULL, AI_NOTICE_SHORT } from './ai-notice'
 import { useAntiCheat } from './use-anti-cheat'
 import Watermark from './watermark'
 import ParticipantFeedbackForm from './feedback-form'
@@ -327,6 +328,7 @@ export default function ExamClient({ id }: { id: string }) {
       {notice && <p className="bg-warn-soft px-4 py-2 text-center text-sm">{notice}</p>}
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5 pb-5">
+        <p className="sr-only">{AI_NOTICE_FULL}</p>
         {shown && (
           <section className="flex flex-1 flex-col gap-4">
             <div className="flex items-baseline justify-between gap-3">
@@ -394,7 +396,7 @@ export default function ExamClient({ id }: { id: string }) {
       </main>
 
       {locked && (
-        <div role="alertdialog" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1527]/97 p-7 text-[#eef2f8]">
+        <div role="alertdialog" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1527] p-7 text-[#eef2f8]">
           <div className="flex w-full max-w-sm flex-col gap-6 text-center">
             <span className="mx-auto flex size-28 items-center justify-center rounded-full bg-[#c8102e] shadow-[0_0_0_12px_rgb(200_16_46/0.22),0_0_0_26px_rgb(200_16_46/0.1)]">
               <Megaphone size={56} />
@@ -552,6 +554,36 @@ const duration = (ms: number) => {
   const s = Math.round(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
+// Post-test feedback sits below the notice/score; a floating pill points to it until it is on screen or sent.
+function FeedbackSection({ attemptId, sent, onSent }: Readonly<{ attemptId: string; sent: boolean; onSent: () => void }>) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [inView, setInView] = useState(false)
+
+  useEffect(() => {
+    if (sent || !ref.current) return
+    const observer = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '0px 0px -20% 0px' })
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [sent])
+
+  return (
+    <>
+      <div ref={ref} id="feedback" className="scroll-mt-4">
+        <ParticipantFeedbackForm attemptId={attemptId} initialSubmitted={sent} onSuccess={onSent} />
+      </div>
+      {!sent && !inView && (
+        <button
+          type="button"
+          onClick={() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="btn btn-primary fixed bottom-5 left-1/2 z-30 -translate-x-1/2 rounded-full px-5 shadow-lg motion-safe:animate-bounce"
+        >
+          Isi feedback di bawah
+          <Chevron dir="down" />
+        </button>
+      )}
+    </>
+  )
+}
 
 function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; offset: number }>) {
   const celebrate = view.submit_reason !== 'violation'
@@ -563,14 +595,15 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
     return (
       <div className="flex min-h-dvh flex-col">
         <Notice
+          fill={view.kind !== 'post'}
           title={title}
           body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
         >
           {celebrate && <Confetti />}
         </Notice>
         {view.kind === 'post' && (
-          <main className="mx-auto w-full max-w-md px-4.5 pb-8 -mt-6">
-            <ParticipantFeedbackForm attemptId={id} initialSubmitted={feedbackSent} onSuccess={() => setFeedbackSent(true)} />
+          <main className="mx-auto w-full max-w-md px-4.5 pb-24">
+            <FeedbackSection attemptId={id} sent={feedbackSent} onSent={() => setFeedbackSent(true)} />
           </main>
         )}
       </div>
@@ -579,13 +612,13 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
   if (view.score === undefined) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <Notice title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
+        <Notice fill={view.kind !== 'post'} title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
           {celebrate && <Confetti />}
           <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
         </Notice>
         {view.kind === 'post' && (
-          <main className="mx-auto w-full max-w-md px-4.5 pb-8 -mt-6">
-            <ParticipantFeedbackForm attemptId={id} initialSubmitted={feedbackSent} onSuccess={() => setFeedbackSent(true)} />
+          <main className="mx-auto w-full max-w-md px-4.5 pb-24">
+            <FeedbackSection attemptId={id} sent={feedbackSent} onSent={() => setFeedbackSent(true)} />
           </main>
         )}
       </div>
@@ -619,7 +652,7 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3 px-4.5 pt-5 pb-6">
+      <main className={`mx-auto flex w-full max-w-md flex-1 flex-col gap-3 px-4.5 pt-5 ${view.kind === 'post' ? 'pb-24' : 'pb-6'}`}>
         {view.kind === 'pre' ? (
           <section aria-labelledby="awal-title" className="card space-y-3 p-4">
             <h2 id="awal-title" className="display text-[0.95rem]">
@@ -665,7 +698,7 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
           <Fact label="Pelanggaran">{view.violation_count}</Fact>
         </dl>
         {view.kind === 'post' && (
-          <ParticipantFeedbackForm attemptId={id} initialSubmitted={feedbackSent} onSuccess={() => setFeedbackSent(true)} />
+          <FeedbackSection attemptId={id} sent={feedbackSent} onSent={() => setFeedbackSent(true)} />
         )}
 
         <div className="flex justify-between gap-3 px-1 pt-1 text-sm text-muted">
@@ -719,6 +752,7 @@ function Bars({ rows }: Readonly<{ rows: { label: string; value: number | null; 
 function QuestionCard({ q, selected, onPick }: { q: PublicQuestion; selected: number | null; onPick: (choice: number) => void }) {
   return (
     <div className="space-y-4">
+      <p aria-hidden className="text-[0.7rem] font-bold tracking-wide text-muted">{AI_NOTICE_SHORT}</p>
       <p data-question className="whitespace-pre-line text-[1.2rem] leading-snug font-semibold">{q.text}</p>
       <div role="group" aria-label="Pilihan jawaban" className="grid gap-2.5">
         {q.options.map((option, i) => {

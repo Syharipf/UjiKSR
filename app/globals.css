@@ -346,6 +346,11 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Exam page: printing (Ctrl+P / Save as PDF on desktop) shows nothing. */
+@media print {
+  .no-select { display: none !important; }
+}
+
 /* Finish / score celebration (app/exam/[id]/confetti.tsx). */
 .confetti {
   position: absolute;

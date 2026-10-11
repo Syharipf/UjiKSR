@@ -94,6 +94,9 @@ export default async function AdminHome() {
             </svg>
             Buat sesi baru
           </a>
+          <Link href="/admin/uji-deteksi" className="btn btn-secondary">
+            Uji deteksi HP <LinkPending />
+          </Link>
           <form action={logout}>
             <SubmitButton className="btn btn-secondary">Keluar</SubmitButton>
           </form>
