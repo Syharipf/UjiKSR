@@ -10,22 +10,54 @@ import SetupError from './setup-error'
 
 type Row = Session & { attempts: { score: number | null }[] }
 
-// A post-test and the pre-test it is paired with sit together under the material's name.
+// Normalize session title by removing common pre/post test prefixes/suffixes
+function cleanTitle(title: string): string {
+  return title
+    .replace(/^\s*(?:pre[- ]?test|post[- ]?test)\s*[:\-–]?\s*/i, '')
+    .replace(/\s*[:\-–]?\s*(?:pre[- ]?test|post[- ]?test)\s*$/i, '')
+    .trim()
+}
+
+// A post-test and pre-test that are paired (via pre_session_id or matching title) sit together under a shared header.
 function group(sessions: Row[]) {
   const byId = new Map(sessions.map((s) => [s.id, s]))
   const used = new Set<string>()
   const groups: { title: string; items: Row[]; pre?: string; post?: string }[] = []
+
+  // 1. Group sessions that are explicitly linked via pre_session_id
   for (const s of sessions) {
     if (used.has(s.id)) continue
     const pre = s.kind === 'post' && s.pre_session_id ? byId.get(s.pre_session_id) : undefined
     if (pre && !used.has(pre.id)) {
       used.add(s.id).add(pre.id)
-      groups.push({ title: s.title.replace(/^\s*post[- ]?test\s*[:\-–]?\s*/i, '') || s.title, items: [s, pre], pre: pre.id, post: s.id })
-    } else {
-      used.add(s.id)
-      groups.push({ title: '', items: [s] })
+      const title = cleanTitle(s.title) || cleanTitle(pre.title) || s.title
+      groups.push({ title, items: [s, pre], pre: pre.id, post: s.id })
     }
   }
+
+  // 2. Group pre-test and post-test that share the exact cleaned topic/title
+  for (const s of sessions) {
+    if (used.has(s.id)) continue
+    const topic = cleanTitle(s.title)
+    if (topic) {
+      // find counterpart with same cleaned topic
+      const counterpart = sessions.find(
+        (other) => !used.has(other.id) && other.id !== s.id && other.kind !== s.kind && cleanTitle(other.title).toLowerCase() === topic.toLowerCase(),
+      )
+      if (counterpart) {
+        used.add(s.id).add(counterpart.id)
+        const post = s.kind === 'post' ? s : counterpart
+        const pre = s.kind === 'pre' ? s : counterpart
+        groups.push({ title: topic, items: [post, pre], pre: pre.id, post: post.id })
+        continue
+      }
+    }
+
+    // 3. Standalone session
+    used.add(s.id)
+    groups.push({ title: '', items: [s] })
+  }
+
   return groups
 }
 
@@ -81,11 +113,17 @@ export default async function AdminHome() {
         {groups.map((g) => (
           <section key={g.items[0].id} className="space-y-2.5">
             {g.title && (
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <h2 className="display text-lg">{g.title}</h2>
-                <Link href={`/admin/compare?pre=${g.pre}&post=${g.post}`} className="text-sm font-bold text-navy-text hover:underline">
-                  Bandingkan pre-test dan post-test <LinkPending />
-                </Link>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-primary" aria-hidden />
+                  <h2 className="display text-lg tracking-tight font-extrabold">{g.title}</h2>
+                  <span className="rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">Pre & Post</span>
+                </div>
+                {g.pre && g.post && (
+                  <Link href={`/admin/compare?pre=${g.pre}&post=${g.post}`} className="text-xs font-bold text-navy-text hover:underline">
+                    Bandingkan pre vs post <LinkPending />
+                  </Link>
+                )}
               </div>
             )}
             <ul className="card divide-y divide-line overflow-hidden">
