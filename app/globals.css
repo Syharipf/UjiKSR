@@ -351,6 +351,11 @@ body {
   .no-select { display: none !important; }
 }
 
+/* Exam page: bottom clearance for mobile browser fullscreen banners and gesture bars */
+.exam-content {
+  padding-bottom: max(1.75rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem));
+}
+
 /* Finish / score celebration (app/exam/[id]/confetti.tsx). */
 .confetti {
   position: absolute;

@@ -15,6 +15,7 @@ import { AI_NOTICE_FULL, AI_NOTICE_SHORT } from './ai-notice'
 import { useAntiCheat } from './use-anti-cheat'
 import Watermark from './watermark'
 import ParticipantFeedbackForm from './feedback-form'
+import { playFinishSound, triggerViolationVibration } from './sound'
 
 type ApiError = Error & { status?: number }
 
@@ -76,9 +77,22 @@ function useStartChecks(view: ExamView | null, offset: number, refresh: () => Pr
   const [checks, setChecks] = useState(0)
   const waiting = view?.status === 'waiting'
   const startsAt = view?.starts_at ?? null
+
   useEffect(() => {
     if (!waiting) return
-    const delay = startsAt === null ? LOBBY_POLL_MS + Math.random() * 1000 : Math.max(0, startsAt - (Date.now() + offset))
+    // If startsAt has arrived or passed, poll aggressively (every 1.5s) until questions load.
+    // If startsAt is still in future, wait until that exact instant.
+    // If startsAt is null (session not started yet), poll every ~2s.
+    const nowServer = Date.now() + offset
+    let delay: number
+    if (startsAt === null) {
+      delay = LOBBY_POLL_MS + Math.random() * 1000
+    } else if (nowServer >= startsAt) {
+      delay = 1500
+    } else {
+      delay = Math.max(0, startsAt - nowServer)
+    }
+
     const t = setTimeout(() => refresh().finally(() => setChecks((n) => n + 1)), delay)
     return () => clearTimeout(t)
   }, [waiting, startsAt, offset, refresh, checks])
@@ -120,6 +134,7 @@ export default function ExamClient({ id }: { id: string }) {
       const now = Date.now()
       if (now - lastViolationRef.current < 2000) return
       lastViolationRef.current = now
+      triggerViolationVibration()
       setWarning('Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten.')
       call(`${base}/violation`, { type }).then(
         (v) => {
@@ -127,8 +142,10 @@ export default function ExamClient({ id }: { id: string }) {
           if (v.status === 'active') {
             setWarning((prev) =>
               prev
-                ? `Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. ` +
-                  `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
+                ? v.max_violations < 999
+                  ? `Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. ` +
+                    `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
+                  : 'Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. Pelanggaran dicatat oleh sistem.'
                 : '',
             )
           } else if (v.status === 'submitted') {
@@ -191,7 +208,7 @@ export default function ExamClient({ id }: { id: string }) {
   if (fatal) return <Notice title="Tidak bisa membuka ujian" body={fatal.message} />
   if (!view) return <Notice title="Memuat ujian…" />
   if (view.status === 'submitted') return <Submitted id={id} view={view} offset={offset} />
-  if (view.status === 'waiting') return <Waiting view={view} offset={offset} />
+  if (view.status === 'waiting') return <Waiting view={view} offset={offset} onRefresh={refresh} />
 
   // Answers and submit run one at a time so each response includes every earlier answer,
   // and a quick "Kumpulkan" never overtakes the last pick. Only the final response is applied,
@@ -252,7 +269,11 @@ export default function ExamClient({ id }: { id: string }) {
               <p className="truncate font-extrabold">{view.title}</p>
               <p className={`flex items-center gap-1.5 text-[0.8rem] ${view.violation_count ? 'font-semibold text-danger' : 'text-muted'}`}>
                 <Megaphone size={14} />
-                Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> dari {view.max_violations}
+                {view.max_violations < 999 ? (
+                  <>Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> dari {view.max_violations}</>
+                ) : (
+                  <>Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> (hanya peringatan)</>
+                )}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -327,7 +348,7 @@ export default function ExamClient({ id }: { id: string }) {
 
       {notice && <p className="bg-warn-soft px-4 py-2 text-center text-sm">{notice}</p>}
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5 pb-5">
+      <main className="exam-content mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5">
         <p className="sr-only">{AI_NOTICE_FULL}</p>
         {shown && (
           <section className="flex flex-1 flex-col gap-4">
@@ -355,7 +376,7 @@ export default function ExamClient({ id }: { id: string }) {
                 disabled={pickedChoice === null || busy}
                 onClick={() => current && pickedChoice !== null && answerCurrent(current.id, pickedChoice)}
                 aria-busy={busy}
-                className="btn btn-primary mt-auto h-14 w-full text-base"
+                className="btn btn-primary mt-auto mb-2 h-14 w-full text-base"
               >
                 <PendingLabel pending={busy}>{view.current_index + 1 === view.total ? 'Jawab & selesai' : 'Jawab & lanjut'}</PendingLabel>
               </button>
@@ -374,7 +395,7 @@ export default function ExamClient({ id }: { id: string }) {
                 </div>
               </div>
             ) : (
-              <div className="mt-auto grid grid-cols-2 gap-2.5">
+              <div className="mt-auto mb-2 grid grid-cols-2 gap-2.5">
                 <button type="button" disabled={index === 0} onClick={() => setCur(index - 1)} className="btn btn-secondary h-14 text-base">
                   <Chevron dir="left" />
                   Sebelumnya
@@ -404,7 +425,11 @@ export default function ExamClient({ id }: { id: string }) {
             <div className="space-y-3">
               {warning && (
                 <p data-violation-count className="font-bold text-[#ff7482]">
-                  {view.violation_count ? `Peringatan: pelanggaran ${view.violation_count} dari ${view.max_violations}` : 'Peringatan'}
+                  {view.violation_count
+                    ? view.max_violations < 999
+                      ? `Peringatan: pelanggaran ${view.violation_count} dari ${view.max_violations}`
+                      : `Peringatan: pelanggaran ke-${view.violation_count}`
+                    : 'Peringatan'}
                 </p>
               )}
               <h2 id="lock-title" className="display text-[1.85rem] text-balance">
@@ -412,7 +437,7 @@ export default function ExamClient({ id }: { id: string }) {
               </h2>
               <p className="text-[#c9d3e3]">{warning || 'Ketuk tombol di bawah untuk kembali ke layar penuh dan melanjutkan ujian.'}</p>
             </div>
-            {view.violation_count > 0 && (
+            {view.violation_count > 0 && view.max_violations < 999 && (
               <div aria-hidden className="flex justify-center gap-2">
                 {Array.from({ length: view.max_violations }, (_, i) => (
                   <span key={i} className={`h-2 w-12 rounded ${i < view.violation_count ? 'bg-[#ff5a6a]' : 'bg-[#2a3d63]'}`} />
@@ -482,7 +507,8 @@ function ReleaseCountdown({ at, offset }: Readonly<{ at: number; offset: number 
 }
 
 // Lobby: the participant's card, so they can check their details while waiting for the start.
-function Waiting({ view, offset }: Readonly<{ view: ExamView; offset: number }>) {
+function Waiting({ view, offset, onRefresh }: Readonly<{ view: ExamView; offset: number; onRefresh?: () => void }>) {
+  const [refreshing, setRefreshing] = useState(false)
   const left = Math.max(0, (view.starts_at ?? 0) - (useNow() + offset))
   return (
     <div className="flex min-h-dvh flex-col">
@@ -525,13 +551,39 @@ function Waiting({ view, offset }: Readonly<{ view: ExamView; offset: number }>)
               Menunggu panitia memulai ujian
             </p>
             <p className="max-w-xs text-center text-secondary">Soal muncul otomatis di sini. Biarkan halaman ini terbuka dan layar tetap menyala.</p>
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setRefreshing(true)
+                  try {
+                    await onRefresh()
+                  } finally {
+                    setRefreshing(false)
+                  }
+                }}
+                disabled={refreshing}
+                className="text-xs text-primary underline hover:text-fg disabled:opacity-50"
+              >
+                {refreshing ? 'Memeriksa status...' : 'Pengawas sudah mulai? Periksa sekarang'}
+              </button>
+            )}
           </>
         ) : (
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <p className="text-secondary">Ujian dimulai dalam</p>
             <p role="timer" className="display text-6xl tabular-nums text-primary">
               {clock(left)}
             </p>
+            {left <= 0 && onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="btn btn-primary mt-2 text-sm"
+              >
+                Masuk ujian sekarang
+              </button>
+            )}
           </div>
         )}
 
@@ -589,6 +641,12 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
   const celebrate = view.submit_reason !== 'violation'
   const title = celebrate ? 'Selamat, kamu sudah selesai!' : 'Ujian dikumpulkan otomatis'
   const [feedbackSent, setFeedbackSent] = useState(view.feedback_sent ?? false)
+
+  useEffect(() => {
+    if (celebrate) {
+      playFinishSound()
+    }
+  }, [celebrate])
 
   // Waiting for score release:
   if (view.score === undefined && view.results_at === null) {

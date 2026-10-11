@@ -74,7 +74,7 @@ function sessionFields(f: FormData) {
           feedback_webhook_url: rawWebhook || null,
         }
       : { pre_session_id: null, feedback_url: null, feedback_webhook_url: null }
-  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20), ...postFields }
+  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 999), ...postFields }
 }
 
 // The chosen pair must be an existing pre-test (and not the session itself).
