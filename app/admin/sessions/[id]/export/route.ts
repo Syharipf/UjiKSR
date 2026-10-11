@@ -18,7 +18,7 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
   let feedbacksByAttempt = new Map<string, { rating: number; clarity: number | null; difficulty: string | null; comment: string | null }>()
   if (session.kind === 'post') {
     try {
-      const fbList = (await db().from('feedbacks').select('attempt_id, rating, clarity, difficulty, comment').eq('session_id', id)).data || []
+      const fbList = (await db().from('feedback').select('attempt_id, rating, clarity, difficulty, comment').eq('session_id', id)).data || []
       feedbacksByAttempt = new Map(fbList.map((f) => [f.attempt_id, f]))
     } catch {}
   }

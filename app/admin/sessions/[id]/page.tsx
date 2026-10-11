@@ -56,11 +56,12 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
       .then(must) as Promise<Violation[]>,
     resultsStatus(session),
     db().from('exam_sessions').select('id, title, held_on, code').eq('kind', 'pre').order('held_on', { ascending: false }).then(must) as Promise<PreOption[]>,
-    // Tolerant query for feedbacks (if session is post-test)
+    // Tolerant query for feedback (if session is post-test)
     (async () => {
       if (session.kind !== 'post') return []
       try {
-        const rows = (await db().from('feedbacks').select('*, attempts(name, nim, prodi, score)').eq('session_id', id).order('created_at', { ascending: false })).data || []
+        const res = await db().from('feedback').select('*, attempts(name, nim, prodi, score)').eq('session_id', id).order('created_at', { ascending: false })
+        const rows = res.data || []
         return rows.map((r: Record<string, unknown>) => {
           const attempt = (r.attempts && typeof r.attempts === 'object' ? r.attempts : {}) as Record<string, unknown>
           return {
@@ -70,10 +71,6 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             nim: typeof attempt.nim === 'string' ? attempt.nim : '-',
             prodi: typeof attempt.prodi === 'string' ? attempt.prodi : '',
             score: typeof attempt.score === 'number' ? attempt.score : null,
-            rating: Number(r.rating) || 5,
-            clarity: typeof r.clarity === 'number' ? r.clarity : null,
-            difficulty: typeof r.difficulty === 'string' ? r.difficulty : null,
-            comment: typeof r.comment === 'string' ? r.comment : null,
             created_at: String(r.created_at),
           }
         })
