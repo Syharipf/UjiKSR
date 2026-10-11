@@ -193,14 +193,16 @@ export default function ExamClient({ id }: { id: string }) {
 
   const deadline = view ? (view.question_deadline_at ?? view.deadline_at) : 0
 
-  // When the timer runs out, let the server (which allows GRACE_MS) skip the question or submit.
-  // Re-armed by every new view, so a check that comes back still active tries again.
+  // When active, poll every 2.5s so when admin does "Paksa kumpul" (or closes session),
+  // the participant's screen transitions to submitted immediately in real-time.
+  // Also wakes up immediately when the deadline expires.
   useEffect(() => {
     if (!active) return
-    const t = setTimeout(refresh, Math.max(0, deadline - (Date.now() + offset)) + GRACE_MS + 500)
+    const msUntilDeadline = Math.max(0, deadline - (Date.now() + offset)) + GRACE_MS + 500
+    const delay = Math.min(2500, msUntilDeadline)
+    const t = setTimeout(refresh, delay)
     return () => clearTimeout(t)
   }, [active, deadline, offset, view, refresh])
-
   useEffect(() => {
     if (view?.status !== 'submitted') return
     exitFullscreen()
