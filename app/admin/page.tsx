@@ -44,6 +44,18 @@ export default async function AdminHome() {
   } catch (error) {
     return <SetupError error={error} />
   }
+
+  // Count feedback separately and tolerantly so missing table never crashes AdminHome
+  const feedbackCounts: Record<string, number> = {}
+  try {
+    const fbRes = await db().from('feedback').select('session_id')
+    if (Array.isArray(fbRes.data)) {
+      for (const row of fbRes.data) {
+        const sid = String(row.session_id)
+        feedbackCounts[sid] = (feedbackCounts[sid] || 0) + 1
+      }
+    }
+  } catch {}
   const groups = group(sessions)
 
   return (
@@ -83,7 +95,7 @@ export default async function AdminHome() {
                   <li key={s.id}>
                     <Link
                       href={`/admin/sessions/${s.id}`}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 p-4 transition-colors hover:bg-subtle sm:grid-cols-[6rem_minmax(0,1fr)_6.5rem_6.5rem_8rem] sm:px-5"
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 p-4 transition-colors hover:bg-subtle sm:grid-cols-[6rem_minmax(0,1fr)_5.5rem_5.5rem_5.5rem_7.5rem] sm:px-5"
                     >
                       <span className={`hidden justify-self-start rounded-lg px-2.5 py-1 text-xs font-extrabold sm:inline ${s.kind === 'pre' ? 'bg-navy-soft text-navy' : 'bg-primary-soft text-danger'}`}>
                         {s.kind === 'pre' ? 'Pre-test' : 'Post-test'}
@@ -101,6 +113,12 @@ export default async function AdminHome() {
                       <span className="hidden text-sm text-muted sm:block">
                         Rata-rata
                         <b className="block text-lg text-fg">{average(s.attempts.map((a) => a.score))}</b>
+                      </span>
+                      <span className="hidden text-sm text-muted sm:block">
+                        Feedback
+                        <b className="block text-lg text-fg">
+                          {s.kind === 'pre' ? '–' : `${feedbackCounts[s.id] || 0}`}
+                        </b>
                       </span>
                       <span className="flex items-center justify-self-end gap-2">
                         <span className={`badge ${open ? 'bg-ok-soft text-ok' : 'bg-subtle text-muted'}`}>{open ? (s.started_at ? 'Berjalan' : 'Lobi') : 'Ditutup'}</span>

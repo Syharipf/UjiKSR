@@ -61,12 +61,18 @@ function sessionFields(f: FormData) {
   if (pre && !UUID.test(pre)) throw new Error('Pasangan pre-test tidak valid')
   const rawFeedback = kind === 'post' ? String(f.get('feedback_url') ?? '').trim() : ''
   if (rawFeedback && !/^https?:\/\//i.test(rawFeedback)) throw new Error('Link feedback harus diawali http:// atau https://')
+  const rawWebhook = kind === 'post' ? String(f.get('feedback_webhook_url') ?? '').trim() : ''
+  if (rawWebhook && !/^https?:\/\//i.test(rawWebhook)) throw new Error('Webhook URL harus diawali http:// atau https://')
+
   // Sent only for post-tests (a pre-test's stale pair or feedback is cleared).
-  // Omit feedback_url when empty so databases without the new column still create/update sessions.
-  const postFields: { pre_session_id?: string | null; feedback_url?: string | null } =
+  const postFields: { pre_session_id?: string | null; feedback_url?: string | null; feedback_webhook_url?: string | null } =
     kind === 'post'
-      ? { pre_session_id: pre || null, ...(rawFeedback ? { feedback_url: rawFeedback } : {}) }
-      : { pre_session_id: null }
+      ? {
+          pre_session_id: pre || null,
+          feedback_url: rawFeedback || null,
+          feedback_webhook_url: rawWebhook || null,
+        }
+      : { pre_session_id: null, feedback_url: null, feedback_webhook_url: null }
   return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20), ...postFields }
 }
 
@@ -84,9 +90,11 @@ export async function createSession(formData: FormData) {
   for (let i = 0; i < 5; i++) {
     const { data, error } = await db().from('exam_sessions').insert({ ...fields, code: newCode() }).select('id').single()
     if (error?.code === '23505') continue // code collision, try another
-    if (error?.code === 'PGRST204' && 'feedback_url' in fields) {
-      const { feedback_url, ...withoutFeedback } = fields
-      const fallback = await db().from('exam_sessions').insert({ ...withoutFeedback, code: newCode() }).select('id').single()
+    if (error?.code === 'PGRST204') {
+      const stripped: Record<string, unknown> = { ...fields }
+      delete stripped.feedback_webhook_url
+      delete stripped.feedback_url
+      const fallback = await db().from('exam_sessions').insert({ ...stripped, code: newCode() }).select('id').single()
       if (fallback.data) redirect(`/admin/sessions/${fallback.data.id}`)
       if (fallback.error?.code === '23505') continue
       if (fallback.error) throw fallback.error
@@ -109,10 +117,17 @@ export async function updateSession(id: string, formData: FormData) {
   }
   const { error } = await db().from('exam_sessions').update(fields).eq('id', id)
   if (error) {
-    // If the database has not yet been upgraded with feedback_url, retry without it
-    if ((error as { code?: string }).code === 'PGRST204' && 'feedback_url' in fields) {
-      const { feedback_url, ...withoutFeedback } = fields
-      must(await db().from('exam_sessions').update(withoutFeedback).eq('id', id))
+    // If the database has not yet been upgraded with feedback_webhook_url or feedback_url, retry progressively
+    if ((error as { code?: string }).code === 'PGRST204') {
+      const withoutWebhook = { ...fields }
+      delete withoutWebhook.feedback_webhook_url
+      const retry1 = await db().from('exam_sessions').update(withoutWebhook).eq('id', id)
+      if (retry1.error && (retry1.error as { code?: string }).code === 'PGRST204') {
+        delete withoutWebhook.feedback_url
+        must(await db().from('exam_sessions').update(withoutWebhook).eq('id', id))
+      } else if (retry1.error) {
+        throw retry1.error
+      }
     } else {
       throw error
     }

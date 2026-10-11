@@ -1,3 +1,4 @@
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import QRCode from 'qrcode'
 import Brand from '@/app/brand'
@@ -16,11 +17,19 @@ export default async function FeedbackQrPage(props: PageProps<'/admin/sessions/[
   const session: Pick<Session, 'title' | 'code' | 'kind' | 'feedback_url'> | null = must(
     await db().from('exam_sessions').select('title, code, kind, feedback_url').eq('id', id).maybeSingle(),
   )
-  if (!session || session.kind !== 'post' || !session.feedback_url) notFound()
+  if (!session || session.kind !== 'post') notFound()
+
+  const h = await headers()
+  const host = h.get('host') ?? ''
+  const proto = h.get('x-forwarded-proto') ?? 'http'
+
+  // If committee entered an external form (Google Form), use it;
+  // Otherwise point to the in-app session exam page so participants open the in-app form directly!
+  const targetUrl = session.feedback_url || `${proto}://${host}/s/${session.code}`
 
   // Generate crisp SVG QR code for projectors
   const qr = `data:image/svg+xml,${encodeURIComponent(
-    await QRCode.toString(session.feedback_url, { type: 'svg', margin: 1 }),
+    await QRCode.toString(targetUrl, { type: 'svg', margin: 1 }),
   )}`
 
   return (
@@ -47,14 +56,16 @@ export default async function FeedbackQrPage(props: PageProps<'/admin/sessions/[
         </div>
 
         <div className="rounded-xl bg-white/10 p-4 border border-white/15 text-sm space-y-1">
-          <p className="font-semibold text-on-band">Link langsung Google Form / Form Feedback:</p>
+          <p className="font-semibold text-on-band">
+            {session.feedback_url ? 'Link Form Feedback:' : 'Alamat Web Ujian & Feedback:'}
+          </p>
           <a
-            href={session.feedback_url}
+            href={targetUrl}
             target="_blank"
             rel="noreferrer"
             className="block truncate underline text-on-band/90 hover:text-white"
           >
-            {session.feedback_url}
+            {targetUrl}
           </a>
         </div>
 
@@ -65,7 +76,7 @@ export default async function FeedbackQrPage(props: PageProps<'/admin/sessions/[
         {/* eslint-disable-next-line @next/next/no-img-element -- data URL for SVG QR */}
         <img
           src={qr}
-          alt={`QR Feedback ${session.feedback_url}`}
+          alt={`QR Feedback ${targetUrl}`}
           className="aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-5 shadow-[0_24px_60px_-24px_rgb(11_21_39/0.45)] lg:w-[min(30vw,60vh)]"
         />
         <div className="text-center space-y-1">

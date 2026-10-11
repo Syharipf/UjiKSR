@@ -19,6 +19,7 @@ export interface Session {
   started_at: string | null // set by "Mulai ujian": everyone's clock starts here (null = lobby, participants wait)
   pre_session_id?: string | null // post-test only: the pre-test it is compared with (by NIM) on the participant's score page
   feedback_url?: string | null // post-test optional: Google Form / feedback questionnaire link
+  feedback_webhook_url?: string | null // post-test optional: Google Sheets Webhook URL to inject rows directly into Drive
 }
 
 // Open = opened by the committee and the exam not yet over.
@@ -108,6 +109,8 @@ export interface ExamView {
   results_at: number | null // submitted, not yet released: when scores appear for everyone (null = session still open)
   // Post-test feedback URL (Google Form, etc.)
   feedback_url?: string | null
+  // Post-test only: whether the participant has already submitted feedback
+  feedback_sent?: boolean
 }
 
 export interface ResultsStatus {
@@ -208,6 +211,7 @@ export function buildView(
   now: Date,
   results = NOT_RELEASED,
   preScore?: number | null,
+  feedbackSent?: boolean,
 ): ExamView {
   const submitted = a.submitted_at !== null
   const waiting = !submitted && !hasStarted(s, now.getTime())
@@ -241,6 +245,7 @@ export function buildView(
     }),
     answers,
     ...(submitted && s.kind === 'post' && s.feedback_url ? { feedback_url: s.feedback_url } : {}),
+    ...(submitted && s.kind === 'post' ? { feedback_sent: feedbackSent ?? false } : {}),
     results_at: submitted && !results.released ? results.at : null,
     ...(submitted && results.released && a.score !== null
       ? {

@@ -45,7 +45,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
   if (!session) notFound()
 
   await finalizeExpired(id)
-  const [questions, attempts, violations, results, preSessions] = await Promise.all([
+  const [questions, attempts, violations, results, preSessions, feedbacks] = await Promise.all([
     db().from('questions').select('*').eq('session_id', id).order('position').then(must) as Promise<Question[]>,
     db().from('attempts').select('*').eq('session_id', id).order('started_at').order('name').then(must) as Promise<Attempt[]>,
     db()
@@ -56,6 +56,31 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
       .then(must) as Promise<Violation[]>,
     resultsStatus(session),
     db().from('exam_sessions').select('id, title, held_on, code').eq('kind', 'pre').order('held_on', { ascending: false }).then(must) as Promise<PreOption[]>,
+    // Tolerant query for feedbacks (if session is post-test)
+    (async () => {
+      if (session.kind !== 'post') return []
+      try {
+        const rows = (await db().from('feedbacks').select('*, attempts(name, nim, prodi, score)').eq('session_id', id).order('created_at', { ascending: false })).data || []
+        return rows.map((r: Record<string, unknown>) => {
+          const attempt = (r.attempts && typeof r.attempts === 'object' ? r.attempts : {}) as Record<string, unknown>
+          return {
+            id: String(r.id),
+            attempt_id: String(r.attempt_id),
+            name: typeof attempt.name === 'string' ? attempt.name : 'Peserta',
+            nim: typeof attempt.nim === 'string' ? attempt.nim : '-',
+            prodi: typeof attempt.prodi === 'string' ? attempt.prodi : '',
+            score: typeof attempt.score === 'number' ? attempt.score : null,
+            rating: Number(r.rating) || 5,
+            clarity: typeof r.clarity === 'number' ? r.clarity : null,
+            difficulty: typeof r.difficulty === 'string' ? r.difficulty : null,
+            comment: typeof r.comment === 'string' ? r.comment : null,
+            created_at: String(r.created_at),
+          }
+        })
+      } catch {
+        return []
+      }
+    })(),
   ])
   const sessionsById = new Map(preSessions.map((p) => [p.id, p]))
   const preOptions = preSessions.filter((p) => p.id !== id)
@@ -110,6 +135,23 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             </SubmitButton>
           </form>
         </div>
+        {session.kind === 'post' && (
+          <div className="flex border-b border-line text-sm font-semibold pt-2">
+            <div className="border-b-2 border-primary px-4 py-2.5 text-primary">
+              Sesi &amp; peserta
+            </div>
+            <Link
+              href={`/admin/sessions/${id}/feedback`}
+              className="border-b-2 border-transparent px-4 py-2.5 text-secondary hover:text-fg transition-colors flex items-center gap-1.5"
+            >
+              <span>Feedback</span>
+              <span className="badge bg-primary/10 text-primary text-xs px-2 py-0.2 rounded-full">
+                {feedbacks.length}
+              </span>
+              <LinkPending />
+            </Link>
+          </div>
+        )}
       </header>
 
       {/* Joins, answers, violations and the score release only happen while someone can still work. */}
@@ -170,7 +212,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             <a href={`/admin/sessions/${id}/qr`} target="_blank" className="btn btn-navy">
               Tayangkan QR &amp; kode
             </a>
-            {session.kind === 'post' && session.feedback_url && (
+            {session.kind === 'post' && (
               <a href={`/admin/sessions/${id}/feedback-qr`} target="_blank" className="btn btn-secondary">
                 Tayangkan QR Feedback
               </a>

@@ -13,6 +13,7 @@ import { enterFullscreen, exitFullscreen, isFullscreen, subscribeFullscreen } fr
 import Confetti from './confetti'
 import { useAntiCheat } from './use-anti-cheat'
 import Watermark from './watermark'
+import ParticipantFeedbackForm from './feedback-form'
 
 type ApiError = Error & { status?: number }
 
@@ -188,7 +189,7 @@ export default function ExamClient({ id }: { id: string }) {
 
   if (fatal) return <Notice title="Tidak bisa membuka ujian" body={fatal.message} />
   if (!view) return <Notice title="Memuat ujian…" />
-  if (view.status === 'submitted') return <Submitted view={view} offset={offset} />
+  if (view.status === 'submitted') return <Submitted id={id} view={view} offset={offset} />
   if (view.status === 'waiting') return <Waiting view={view} offset={offset} />
 
   // Answers and submit run one at a time so each response includes every earlier answer,
@@ -552,53 +553,42 @@ const duration = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }>) {
+function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; offset: number }>) {
   const celebrate = view.submit_reason !== 'violation'
   const title = celebrate ? 'Selamat, kamu sudah selesai!' : 'Ujian dikumpulkan otomatis'
+  const [feedbackSent, setFeedbackSent] = useState(view.feedback_sent ?? false)
+
+  // Waiting for score release:
   if (view.score === undefined && view.results_at === null) {
     return (
-      <Notice
-        title={title}
-        body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
-      >
-        {celebrate && <Confetti />}
-        {view.feedback_url && (
-          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left space-y-2">
-            <p className="text-sm font-semibold text-fg">Form Feedback / Evaluasi</p>
-            <p className="text-xs text-muted">Sembari menunggu nilai keluar, silakan isi kuisioner feedback berikut:</p>
-            <a
-              href={view.feedback_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary inline-flex h-10 w-full items-center justify-center text-sm"
-            >
-              Isi Form Feedback &rarr;
-            </a>
-          </div>
+      <div className="flex min-h-dvh flex-col">
+        <Notice
+          title={title}
+          body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
+        >
+          {celebrate && <Confetti />}
+        </Notice>
+        {view.kind === 'post' && (
+          <main className="mx-auto w-full max-w-md px-4.5 pb-8 -mt-6">
+            <ParticipantFeedbackForm attemptId={id} initialSubmitted={feedbackSent} onSuccess={() => setFeedbackSent(true)} />
+          </main>
         )}
-      </Notice>
+      </div>
     )
   }
   if (view.score === undefined) {
     return (
-      <Notice title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
-        {celebrate && <Confetti />}
-        <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
-        {view.feedback_url && (
-          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left space-y-2">
-            <p className="text-sm font-semibold text-fg">Form Feedback / Evaluasi</p>
-            <p className="text-xs text-muted">Sembari menunggu nilai serentak keluar, silakan isi form feedback berikut:</p>
-            <a
-              href={view.feedback_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary inline-flex h-10 w-full items-center justify-center text-sm"
-            >
-              Isi Form Feedback &rarr;
-            </a>
-          </div>
+      <div className="flex min-h-dvh flex-col">
+        <Notice title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
+          {celebrate && <Confetti />}
+          <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
+        </Notice>
+        {view.kind === 'post' && (
+          <main className="mx-auto w-full max-w-md px-4.5 pb-8 -mt-6">
+            <ParticipantFeedbackForm attemptId={id} initialSubmitted={feedbackSent} onSuccess={() => setFeedbackSent(true)} />
+          </main>
         )}
-      </Notice>
+      </div>
     )
   }
   const firstName = view.name.trim().split(/\s+/)[0]
@@ -674,21 +664,8 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
           <Fact label="Waktu dipakai">{view.time_used_ms !== undefined ? duration(view.time_used_ms) : '–'}</Fact>
           <Fact label="Pelanggaran">{view.violation_count}</Fact>
         </dl>
-        {view.feedback_url && (
-          <section className="card space-y-2.5 border-primary/30 bg-primary/5 p-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-fg">Evaluasi &amp; Feedback Kegiatan</h2>
-              <p className="text-xs text-muted">Mohon bantu isi feedback singkat untuk perbaikan materi dan kegiatan:</p>
-            </div>
-            <a
-              href={view.feedback_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary inline-flex h-11 w-full items-center justify-center text-sm font-semibold"
-            >
-              Buka Form Feedback (Google Form) &rarr;
-            </a>
-          </section>
+        {view.kind === 'post' && (
+          <ParticipantFeedbackForm attemptId={id} initialSubmitted={feedbackSent} onSuccess={() => setFeedbackSent(true)} />
         )}
 
         <div className="flex justify-between gap-3 px-1 pt-1 text-sm text-muted">

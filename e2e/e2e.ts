@@ -1,9 +1,11 @@
 // End-to-end run against the local stand-in (PGlite + PostgREST) and `next dev` on :3100.
 // Start everything with `bun run e2e` (see e2e/run.sh).
+import fs from 'node:fs'
 import { chromium, devices, type Browser, type Page, type Route } from 'playwright-core'
 import assert from 'node:assert/strict'
 
-const BASE = 'http://localhost:3100'
+const BASE = (process.env.E2E_BASE_URL || process.env.BASE || 'http://localhost:3100').replace(/\/+$/, '')
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'rahasia-e2e'
 const CSV = new URL('../public/contoh-soal.csv', import.meta.url).pathname
 // question fragment → correct option, matching public/contoh-soal.csv
 const KEY: [string, string][] = [
@@ -25,7 +27,7 @@ async function admin(browser: Browser) {
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await page.waitForURL(/error=1/)
   await page.getByText('Password salah.').waitFor()
-  await page.fill('input[name=password]', 'rahasia-e2e')
+  await page.fill('input[name=password]', ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await page.waitForURL(`${BASE}/admin`)
   log('admin login rejects wrong password, accepts right one')
@@ -86,7 +88,15 @@ async function pick(page: Page, text: string) {
   await page.locator('main [role=group] button', { hasText: new RegExp(`^(?:[A-ES]\\.?\\s?)?${text}$`) }).first().click()
 }
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium-browser' })
+const resolveChromium = () => {
+  if (process.env.CHROMIUM_PATH && fs.existsSync(process.env.CHROMIUM_PATH)) return process.env.CHROMIUM_PATH
+  for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome']) {
+    if (fs.existsSync(p)) return p
+  }
+  return undefined
+}
+const chromiumPath = resolveChromium()
+const browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {})
 try {
   const adminPage = await admin(browser)
 

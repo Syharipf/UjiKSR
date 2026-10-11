@@ -46,6 +46,7 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
     if (!active) return
     let last = 0
     let maxArea = window.innerWidth * window.innerHeight
+
     const report = (type: string) => {
       const now = Date.now()
       if (now - last < DEBOUNCE_MS) return
@@ -53,23 +54,41 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
       onViolation(type)
     }
 
-    // Android navigation bar / Home button / Circle to Search / Google Lens overlay:
-    // blur and visibilitychange handle app switching and floating assistant overlays.
-    const listeners: [EventTarget, string, () => void][] = [
-      [document, 'visibilitychange', () => document.visibilityState === 'hidden' && report('hidden')],
-      [window, 'blur', () => report('blur')],
-      [document, 'fullscreenchange', () => !isFullscreen() && report('fullscreen_exit')],
+    // Android notification panel / Google Assistant / Circle to Search overlay:
+    // When the top status bar / notification shade is pulled down or an assistant overlay appears,
+    // Android pauses input focus from the web view.
+    // 1. document.hasFocus() immediately returns false even before any blur event is dispatched.
+    // 2. window.blur & window.focusout fire when focus transitions.
+    // 3. fullscreenchange fires if pulling down the notification shade cancels immersion.
+    const checkFocus = () => {
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        report('blur')
+      }
+    }
+
+    const listeners: [EventTarget, string, EventListener][] = [
+      [document, 'visibilitychange', (() => document.visibilityState === 'hidden' && report('hidden')) as EventListener],
+      [window, 'blur', (() => report('blur')) as EventListener],
+      [window, 'focusout', (() => checkFocus()) as EventListener],
+      [document, 'fullscreenchange', (() => !isFullscreen() && report('fullscreen_exit')) as EventListener],
       [
         window,
         'resize',
-        () => {
+        (() => {
           const area = window.innerWidth * window.innerHeight
           if (isFullscreen()) maxArea = Math.max(maxArea, area)
           if (area < maxArea * MIN_AREA_RATIO) report('resize')
-        },
+        }) as EventListener,
       ],
     ]
     listeners.forEach(([target, type, fn]) => target.addEventListener(type, fn))
-    return () => listeners.forEach(([target, type, fn]) => target.removeEventListener(type, fn))
+
+    // Active polling for document.hasFocus() to catch notification shade dragging & floating overlays
+    const focusInterval = setInterval(checkFocus, 350)
+
+    return () => {
+      clearInterval(focusInterval)
+      listeners.forEach(([target, type, fn]) => target.removeEventListener(type, fn))
+    }
   }, [active, onViolation])
 }

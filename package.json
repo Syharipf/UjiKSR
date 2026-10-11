@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "bun test",
     "e2e": "bash e2e/run.sh",
+    "e2e:staging": "bash e2e/run-staging.sh",
     "screenshots": "bash e2e/run.sh screenshots.ts",
     "landing:dev": "cd landing && bun run dev",
     "landing:build": "cd landing && bun run build"
