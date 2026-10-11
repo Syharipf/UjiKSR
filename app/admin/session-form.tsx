@@ -103,36 +103,6 @@ export default function SessionForm({
           <span className="text-xs font-normal text-muted">Peserta melihat kenaikan nilainya dibanding pre-test ini, dicocokkan lewat NIM.</span>
         </label>
       )}
-      {kind === 'post' && (
-        <label className="grid gap-1.5 sm:col-span-2">
-          Link Feedback (Google Form / Kuisioner)
-          <input
-            type="url"
-            name="feedback_url"
-            defaultValue={session?.feedback_url ?? ''}
-            placeholder="https://forms.gle/... atau https://docs.google.com/forms/..."
-            className={input}
-          />
-          <span className="text-xs font-normal text-muted">
-            Opsional. Ditampilkan ke peserta setelah selesai post-test dan tersedia tayangan QR layar proyektor untuk panitia.
-          </span>
-        </label>
-      )}
-      {kind === 'post' && (
-        <label className="grid gap-1.5 sm:col-span-2">
-          Webhook Google Sheets (Inject Langsung ke Excel Drive)
-          <input
-            type="url"
-            name="feedback_webhook_url"
-            defaultValue={session?.feedback_webhook_url ?? ''}
-            placeholder="https://script.google.com/macros/s/.../exec"
-            className={input}
-          />
-          <span className="text-xs font-normal text-muted">
-            Opsional. URL Web App dari Google Apps Script di spreadsheet panitia. Setiap peserta mengirim feedback, datanya langsung muncul di spreadsheet saat itu juga.
-          </span>
-        </label>
-      )}
       <div className="grid gap-2 sm:col-span-2">
         <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold">
           <input

@@ -60,19 +60,10 @@ function sessionFields(f: FormData) {
   // Post-test only: the pre-test its participants' scores are compared with (by NIM). Checked in pairWith.
   const pre = kind === 'post' ? String(f.get('pre_session_id') ?? '') : ''
   if (pre && !UUID.test(pre)) throw new Error('Pasangan pre-test tidak valid')
-  const rawFeedback = kind === 'post' ? String(f.get('feedback_url') ?? '').trim() : ''
-  if (rawFeedback && !/^https?:\/\//i.test(rawFeedback)) throw new Error('Link feedback harus diawali http:// atau https://')
-  const rawWebhook = kind === 'post' ? String(f.get('feedback_webhook_url') ?? '').trim() : ''
-  if (rawWebhook && !/^https?:\/\//i.test(rawWebhook)) throw new Error('Webhook URL harus diawali http:// atau https://')
-
-  // Sent only for post-tests (a pre-test's stale pair or feedback is cleared).
+  // Sent only for post-tests (a pre-test's stale pair is cleared).
   const postFields: { pre_session_id?: string | null; feedback_url?: string | null; feedback_webhook_url?: string | null } =
     kind === 'post'
-      ? {
-          pre_session_id: pre || null,
-          feedback_url: rawFeedback || null,
-          feedback_webhook_url: rawWebhook || null,
-        }
+      ? { pre_session_id: pre || null, feedback_url: null, feedback_webhook_url: null }
       : { pre_session_id: null, feedback_url: null, feedback_webhook_url: null }
   return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 999), ...postFields }
 }
