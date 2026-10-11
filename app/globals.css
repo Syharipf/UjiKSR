@@ -351,9 +351,11 @@ body {
   .no-select { display: none !important; }
 }
 
-/* Exam page: bottom clearance for mobile browser fullscreen banners and gesture bars */
+/* Exam page: generous bottom clearance so Android browser fullscreen toasts
+   ("Swipe down to exit fullscreen") that float at the bottom (usually 50-70px tall)
+   never cover the navigation buttons or action controls. */
 .exam-content {
-  padding-bottom: max(1.75rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem));
+  padding-bottom: max(6rem, calc(env(safe-area-inset-bottom, 0px) + 5rem));
 }
 
 /* Finish / score celebration (app/exam/[id]/confetti.tsx). */

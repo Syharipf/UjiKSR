@@ -389,7 +389,7 @@ export default function ExamClient({ id }: { id: string }) {
                 disabled={pickedChoice === null || busy}
                 onClick={() => current && pickedChoice !== null && answerCurrent(current.id, pickedChoice)}
                 aria-busy={busy}
-                className="btn btn-primary mt-auto mb-2 h-14 w-full text-base"
+                className="btn btn-primary mt-auto mb-6 h-14 w-full text-base shadow-sm"
               >
                 <PendingLabel pending={busy}>{view.current_index + 1 === view.total ? 'Jawab & selesai' : 'Jawab & lanjut'}</PendingLabel>
               </button>
@@ -408,7 +408,7 @@ export default function ExamClient({ id }: { id: string }) {
                 </div>
               </div>
             ) : (
-              <div className="mt-auto mb-2 grid grid-cols-2 gap-2.5">
+              <div className="mt-auto mb-6 grid grid-cols-2 gap-2.5">
                 <button type="button" disabled={index === 0} onClick={() => setCur(index - 1)} className="btn btn-secondary h-14 text-base">
                   <Chevron dir="left" />
                   Sebelumnya
