@@ -59,9 +59,15 @@ function sessionFields(f: FormData) {
   // Post-test only: the pre-test its participants' scores are compared with (by NIM). Checked in pairWith.
   const pre = kind === 'post' ? String(f.get('pre_session_id') ?? '') : ''
   if (pre && !UUID.test(pre)) throw new Error('Pasangan pre-test tidak valid')
-  // Sent only for post-tests (a pre-test's stale pair is ignored, see lib/attempts.ts view).
-  const pair: { pre_session_id?: string | null } = kind === 'post' ? { pre_session_id: pre || null } : {}
-  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20), ...pair }
+  const rawFeedback = kind === 'post' ? String(f.get('feedback_url') ?? '').trim() : ''
+  if (rawFeedback && !/^https?:\/\//i.test(rawFeedback)) throw new Error('Link feedback harus diawali http:// atau https://')
+  // Sent only for post-tests (a pre-test's stale pair or feedback is cleared).
+  // Omit feedback_url when empty so databases without the new column still create/update sessions.
+  const postFields: { pre_session_id?: string | null; feedback_url?: string | null } =
+    kind === 'post'
+      ? { pre_session_id: pre || null, ...(rawFeedback ? { feedback_url: rawFeedback } : {}) }
+      : { pre_session_id: null }
+  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20), ...postFields }
 }
 
 // The chosen pair must be an existing pre-test (and not the session itself).
@@ -78,6 +84,13 @@ export async function createSession(formData: FormData) {
   for (let i = 0; i < 5; i++) {
     const { data, error } = await db().from('exam_sessions').insert({ ...fields, code: newCode() }).select('id').single()
     if (error?.code === '23505') continue // code collision, try another
+    if (error?.code === 'PGRST204' && 'feedback_url' in fields) {
+      const { feedback_url, ...withoutFeedback } = fields
+      const fallback = await db().from('exam_sessions').insert({ ...withoutFeedback, code: newCode() }).select('id').single()
+      if (fallback.data) redirect(`/admin/sessions/${fallback.data.id}`)
+      if (fallback.error?.code === '23505') continue
+      if (fallback.error) throw fallback.error
+    }
     if (error) throw error
     redirect(`/admin/sessions/${data.id}`)
   }
@@ -94,7 +107,16 @@ export async function updateSession(id: string, formData: FormData) {
     const current: Pick<Session, TimerField> = must(await db().from('exam_sessions').select(TIMER_FIELDS.join(',')).eq('id', id).single())
     if (TIMER_FIELDS.some((key) => key in fields && fields[key] !== current[key])) return back(id, TIMER_LOCKED)
   }
-  must(await db().from('exam_sessions').update(fields).eq('id', id))
+  const { error } = await db().from('exam_sessions').update(fields).eq('id', id)
+  if (error) {
+    // If the database has not yet been upgraded with feedback_url, retry without it
+    if ((error as { code?: string }).code === 'PGRST204' && 'feedback_url' in fields) {
+      const { feedback_url, ...withoutFeedback } = fields
+      must(await db().from('exam_sessions').update(withoutFeedback).eq('id', id))
+    } else {
+      throw error
+    }
+  }
   back(id, 'Pengaturan tersimpan')
 }
 

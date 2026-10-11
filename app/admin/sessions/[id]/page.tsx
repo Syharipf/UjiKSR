@@ -12,6 +12,7 @@ import LinkPending from '@/app/link-pending'
 import ParticipantsTable from './participants-table'
 import SessionCharts from './session-charts'
 import SubmitButton from '@/app/submit-button'
+import QuestionUploader from './question-uploader'
 import QuestionForm from '../../question-form'
 import SessionForm, { type PreOption } from '../../session-form'
 import { AutoRefresh, Countdown } from './live'
@@ -169,6 +170,11 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
             <a href={`/admin/sessions/${id}/qr`} target="_blank" className="btn btn-navy">
               Tayangkan QR &amp; kode
             </a>
+            {session.kind === 'post' && session.feedback_url && (
+              <a href={`/admin/sessions/${id}/feedback-qr`} target="_blank" className="btn btn-secondary">
+                Tayangkan QR Feedback
+              </a>
+            )}
             <form action={setOpen.bind(null, id, !open)}>
               <SubmitButton className={`btn ${open ? 'btn-secondary' : 'btn-primary'}`}>{open ? 'Tutup sesi' : 'Buka sesi'}</SubmitButton>
             </form>
@@ -315,30 +321,9 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
 
             <details className="rounded-xl border border-line p-4">
               <summary className="cursor-pointer font-semibold">Upload file soal (Excel / CSV)</summary>
-              <form action={uploadQuestions.bind(null, id)} className="mt-3 flex flex-wrap items-center gap-2">
-                {/* No accept filter: Android often labels .csv with other MIME types and greys the file out. */}
-                <input type="file" name="file" required className="min-w-0 text-sm" />
-                {questions.length ? (
-                  <SubmitButton
-                    confirm={`Upload akan MENGGANTI ${questions.length} soal yang ada. Lanjutkan?`}
-                    className="btn btn-secondary text-sm"
-                  >
-                    Upload &amp; ganti semua soal
-                  </SubmitButton>
-                ) : (
-                  <SubmitButton className="btn btn-secondary text-sm">Upload &amp; ganti semua soal</SubmitButton>
-                )}
-              </form>
-              <p className="mt-2 text-sm text-muted">
-                Format: <code>type,question,a,b,c,d,e,answer</code>. Mendukung file Excel (.xlsx) dan CSV (.csv). Unduh template:{' '}
-                <a href="/contoh-soal.xlsx" download className="font-semibold underline">
-                  Excel (.xlsx)
-                </a>{' '}
-                ·{' '}
-                <a href="/contoh-soal.csv" download className="underline">
-                  CSV (.csv)
-                </a>
-              </p>
+              <div className="mt-3">
+                <QuestionUploader action={uploadQuestions.bind(null, id)} questionCount={questions.length} />
+              </div>
             </details>
           </>
         )}

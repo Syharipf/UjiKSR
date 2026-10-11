@@ -102,6 +102,21 @@ export default function SessionForm({
           <span className="text-xs font-normal text-muted">Peserta melihat kenaikan nilainya dibanding pre-test ini, dicocokkan lewat NIM.</span>
         </label>
       )}
+      {kind === 'post' && (
+        <label className="grid gap-1.5 sm:col-span-2">
+          Link Feedback (Google Form / Kuisioner)
+          <input
+            type="url"
+            name="feedback_url"
+            defaultValue={session?.feedback_url ?? ''}
+            placeholder="https://forms.gle/... atau https://docs.google.com/forms/..."
+            className={input}
+          />
+          <span className="text-xs font-normal text-muted">
+            Opsional. Ditampilkan ke peserta setelah selesai post-test dan tersedia tayangan QR layar proyektor untuk panitia.
+          </span>
+        </label>
+      )}
       <label className="grid gap-1.5">
         Batas pelanggaran (auto-submit)
         <input type="number" name="max_violations" min={1} max={20} required defaultValue={session?.max_violations ?? 3} className={input} />
