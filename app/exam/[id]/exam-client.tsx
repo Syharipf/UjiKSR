@@ -458,8 +458,8 @@ export default function ExamClient({ id }: { id: string }) {
               </div>
             )}
             <button
-              onClick={() => {
-                enterFullscreen()
+              onClick={async () => {
+                await enterFullscreen()
                 setWarning('')
               }}
               className="btn h-14 w-full bg-white text-base text-[#0f1a2e] hover:bg-[#eef2f8]"

@@ -9,16 +9,20 @@ const supported = () =>
 
 export const isFullscreen = () => !supported() || failed || document.fullscreenElement !== null
 
-export function enterFullscreen() {
+export async function enterFullscreen() {
   if (!supported()) return
   if (document.fullscreenElement) {
-    // If already in fullscreen, re-requesting or re-focusing triggers the browser
-    // to immediately re-hide transient system navigation / status bars instead of waiting for timeout.
-    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {})
+    // If already in fullscreen but system bars (status bar / navbar) were revealed by a transient swipe,
+    // browsers ignore a redundant requestFullscreen().
+    // Exiting and re-entering fullscreen immediately forces the OS WindowInsetsController to reset immersion mode.
     try {
-      window.scrollTo(0, 1)
-      window.scrollTo(0, 0)
-    } catch {}
+      await document.exitFullscreen()
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    } catch {
+      try {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+      } catch {}
+    }
     return
   }
   let changed = false
