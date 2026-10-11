@@ -10,7 +10,17 @@ const supported = () =>
 export const isFullscreen = () => !supported() || failed || document.fullscreenElement !== null
 
 export function enterFullscreen() {
-  if (!supported() || document.fullscreenElement) return
+  if (!supported()) return
+  if (document.fullscreenElement) {
+    // If already in fullscreen, re-requesting or re-focusing triggers the browser
+    // to immediately re-hide transient system navigation / status bars instead of waiting for timeout.
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {})
+    try {
+      window.scrollTo(0, 1)
+      window.scrollTo(0, 0)
+    } catch {}
+    return
+  }
   let changed = false
   document.addEventListener(
     'fullscreenchange',
