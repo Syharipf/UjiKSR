@@ -8,13 +8,14 @@ import { PendingLabel } from './pending'
 export default function SubmitButton({
   className = '',
   confirm,
+  disabled = false,
   children,
-}: Readonly<{ className?: string; confirm?: string; children: React.ReactNode }>) {
+}: Readonly<{ className?: string; confirm?: string; disabled?: boolean; children: React.ReactNode }>) {
   const { pending } = useFormStatus()
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
       onClick={confirm ? (e) => !window.confirm(confirm) && e.preventDefault() : undefined}
       className={`relative ${className}`}

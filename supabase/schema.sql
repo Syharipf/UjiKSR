@@ -20,6 +20,8 @@
 --
 -- Upgrading a database created before post-tests were paired with a pre-test? Run just this:
 --   alter table exam_sessions add column pre_session_id uuid references exam_sessions (id) on delete set null;
+-- Upgrading a database created before post-test feedback existed? Run just this:
+--   alter table exam_sessions add column feedback_url text;
 
 create table exam_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -35,6 +37,7 @@ create table exam_sessions (
   closes_at timestamptz, -- set by "Mulai ujian": no new participants after this (null = until closed by hand)
   started_at timestamptz, -- set by "Mulai ujian": every attempt's clock starts here (null = lobby)
   pre_session_id uuid references exam_sessions (id) on delete set null, -- post-test: its pre-test, compared by NIM
+  feedback_url text, -- post-test optional: Google Form or external evaluation survey
   created_at timestamptz not null default now()
 );
 

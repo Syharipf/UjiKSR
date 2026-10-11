@@ -562,6 +562,20 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
         body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
       >
         {celebrate && <Confetti />}
+        {view.feedback_url && (
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left space-y-2">
+            <p className="text-sm font-semibold text-fg">Form Feedback / Evaluasi</p>
+            <p className="text-xs text-muted">Sembari menunggu nilai keluar, silakan isi kuisioner feedback berikut:</p>
+            <a
+              href={view.feedback_url}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-primary inline-flex h-10 w-full items-center justify-center text-sm"
+            >
+              Isi Form Feedback &rarr;
+            </a>
+          </div>
+        )}
       </Notice>
     )
   }
@@ -570,6 +584,20 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
       <Notice title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
         {celebrate && <Confetti />}
         <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
+        {view.feedback_url && (
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left space-y-2">
+            <p className="text-sm font-semibold text-fg">Form Feedback / Evaluasi</p>
+            <p className="text-xs text-muted">Sembari menunggu nilai serentak keluar, silakan isi form feedback berikut:</p>
+            <a
+              href={view.feedback_url}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-primary inline-flex h-10 w-full items-center justify-center text-sm"
+            >
+              Isi Form Feedback &rarr;
+            </a>
+          </div>
+        )}
       </Notice>
     )
   }
@@ -646,6 +674,22 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
           <Fact label="Waktu dipakai">{view.time_used_ms !== undefined ? duration(view.time_used_ms) : '–'}</Fact>
           <Fact label="Pelanggaran">{view.violation_count}</Fact>
         </dl>
+        {view.feedback_url && (
+          <section className="card space-y-2.5 border-primary/30 bg-primary/5 p-4">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold text-fg">Evaluasi &amp; Feedback Kegiatan</h2>
+              <p className="text-xs text-muted">Mohon bantu isi feedback singkat untuk perbaikan materi dan kegiatan:</p>
+            </div>
+            <a
+              href={view.feedback_url}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-primary inline-flex h-11 w-full items-center justify-center text-sm font-semibold"
+            >
+              Buka Form Feedback (Google Form) &rarr;
+            </a>
+          </section>
+        )}
 
         <div className="flex justify-between gap-3 px-1 pt-1 text-sm text-muted">
           <span className="min-w-0 truncate">{view.name}</span>

@@ -18,6 +18,7 @@ export interface Session {
   closes_at: string | null // set by "Mulai ujian": the exam's end, it takes no new participants after it (null = until closed by hand)
   started_at: string | null // set by "Mulai ujian": everyone's clock starts here (null = lobby, participants wait)
   pre_session_id?: string | null // post-test only: the pre-test it is compared with (by NIM) on the participant's score page
+  feedback_url?: string | null // post-test optional: Google Form / feedback questionnaire link
 }
 
 // Open = opened by the committee and the exam not yet over.
@@ -105,6 +106,8 @@ export interface ExamView {
   // Absent when there is nothing to compare with (a pre-test, or a post-test without a pair).
   pre_score?: number | null
   results_at: number | null // submitted, not yet released: when scores appear for everyone (null = session still open)
+  // Post-test feedback URL (Google Form, etc.)
+  feedback_url?: string | null
 }
 
 export interface ResultsStatus {
@@ -237,6 +240,7 @@ export function buildView(
       return { id, type: q.type, text: q.text, options: a.option_orders[id].map((i) => q.options[i]) }
     }),
     answers,
+    ...(submitted && s.kind === 'post' && s.feedback_url ? { feedback_url: s.feedback_url } : {}),
     results_at: submitted && !results.released ? results.at : null,
     ...(submitted && results.released && a.score !== null
       ? {

@@ -52,6 +52,9 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
       last = now
       onViolation(type)
     }
+
+    // Android navigation bar / Home button / Circle to Search / Google Lens overlay:
+    // blur and visibilitychange handle app switching and floating assistant overlays.
     const listeners: [EventTarget, string, () => void][] = [
       [document, 'visibilitychange', () => document.visibilityState === 'hidden' && report('hidden')],
       [window, 'blur', () => report('blur')],
