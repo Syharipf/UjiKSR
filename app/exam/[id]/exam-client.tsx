@@ -11,9 +11,7 @@ import ThemeToggle from '@/app/theme-toggle'
 import { clock, GRACE_MS, LOBBY_POLL_MS, type ExamView, type PublicQuestion } from '@/lib/exam'
 import { enterFullscreen, exitFullscreen, isFullscreen, subscribeFullscreen } from '@/lib/fullscreen'
 import Confetti from './confetti'
-import { AI_NOTICE_FULL, AI_NOTICE_SHORT } from './ai-notice'
 import { useAntiCheat } from './use-anti-cheat'
-import Watermark from './watermark'
 import ParticipantFeedbackForm from './feedback-form'
 import { playFinishSound, triggerViolationVibration } from './sound'
 
@@ -260,8 +258,6 @@ export default function ExamClient({ id }: { id: string }) {
 
   return (
     <div className="no-select flex min-h-dvh flex-col">
-      <Watermark text={`${view.name} · ${view.nim}`} />
-
       <header className="sticky top-0 z-30 border-t-[5px] border-t-band bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl flex-col gap-3 px-4 pt-3 pb-3">
           <div className="flex items-center justify-between gap-3">
@@ -349,7 +345,6 @@ export default function ExamClient({ id }: { id: string }) {
       {notice && <p className="bg-warn-soft px-4 py-2 text-center text-sm">{notice}</p>}
 
       <main className="exam-content mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5">
-        <p className="sr-only">{AI_NOTICE_FULL}</p>
         {shown && (
           <section className="flex flex-1 flex-col gap-4">
             <div className="flex items-baseline justify-between gap-3">
@@ -810,7 +805,6 @@ function Bars({ rows }: Readonly<{ rows: { label: string; value: number | null; 
 function QuestionCard({ q, selected, onPick }: { q: PublicQuestion; selected: number | null; onPick: (choice: number) => void }) {
   return (
     <div className="space-y-4">
-      <p aria-hidden className="text-[0.7rem] font-bold tracking-wide text-muted">{AI_NOTICE_SHORT}</p>
       <p data-question className="whitespace-pre-line text-[1.2rem] leading-snug font-semibold">{q.text}</p>
       <div role="group" aria-label="Pilihan jawaban" className="grid gap-2.5">
         {q.options.map((option, i) => {

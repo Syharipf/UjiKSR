@@ -8,11 +8,11 @@ const DEBOUNCE_MS = 2000
 // Split screen roughly halves the viewport; rotating the phone keeps the area about the same.
 const MIN_AREA_RATIO = 0.6
 const BLOCKED = ['contextmenu', 'copy', 'cut', 'selectstart', 'dragstart'] as const
-// Only trigger edge swipe when the touch truly originates at the extreme physical edge (14px)
-// and travels significantly inward (40px) to reveal system navbar/status bar.
-// This prevents accidental triggers when scrolling or tapping near bottom buttons.
-const EDGE_PX = 14
-const EDGE_TRAVEL_PX = 40
+// Android's system-bar reveal swipe starts within ~24-28dp of the edge (system_gestures_start_threshold).
+// Keeping it strict ensures revealing the navbar/notification shade (e.g. to open Circle to Search/Lens)
+// is immediately caught, while auto-submit can be turned off in session settings.
+const EDGE_PX = 28
+const EDGE_TRAVEL_PX = 20
 
 // `awake`: hold the screen on (also while waiting in the lobby, so the phone is unlocked when the questions appear).
 export function useAntiCheat(active: boolean, onViolation: (type: string) => void, awake = active) {
@@ -112,9 +112,11 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
     }
 
     const onTouchCancel = () => {
-      edge = null
+      if (edge) {
+        edge = null
+        report('edge_swipe')
+      }
     }
-
     const onTouchEnd = () => {
       edge = null
     }

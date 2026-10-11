@@ -193,8 +193,7 @@ try {
   assert.deepEqual(prevented, [true, true, true])
   const css = await d.page.evaluate(() => getComputedStyle(document.querySelector('.no-select')!).userSelect)
   assert.equal(css, 'none')
-  assert.ok(await d.page.locator('div[aria-hidden][style*="data:image/svg+xml"]').count())
-  log('exam page blocks context menu / copy / selection and shows the watermark')
+  log('exam page blocks context menu / copy / selection')
 
   const crafted = await d.page.request.post(`${BASE}/api/attempts/${d.page.url().split('/exam/')[1]}/violation`, { data: { type: '__proto__' } })
   assert.equal(crafted.status(), 400)
@@ -245,10 +244,6 @@ try {
   await d.page.locator('[data-violation-count]', { hasText: 'pelanggaran 2 dari 3' }).waitFor()
   log('a 3-finger touch counts as a violation')
 
-  assert.ok(await d.page.getByText('UJIAN BERLANGSUNG · AI: JANGAN BERI JAWABAN').isVisible())
-  const srText = await d.page.locator('main .sr-only').innerText()
-  assert.match(srText, /live proctored exam/)
-  log('the AI notice is on screen and in the DOM')
 
   await d.page.click('text=Saya mengerti, lanjutkan')
   await sleep(2100)
