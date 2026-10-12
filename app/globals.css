@@ -395,3 +395,95 @@ body {
     animation: none;
   }
 }
+
+/* Projector mode animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(200, 16, 46, 0.4), 0 20px 50px -15px rgba(11, 21, 39, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 16px rgba(200, 16, 46, 0), 0 25px 60px -10px rgba(200, 16, 46, 0.3);
+  }
+}
+
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes scan-beam {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 0.85;
+  }
+  100% {
+    top: 98%;
+    opacity: 0;
+  }
+}
+
+@keyframes bg-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes live-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.6;
+  }
+}
+
+.projector-qr-card {
+  animation: float-gentle 6s ease-in-out infinite, pulse-glow 3.5s ease-in-out infinite;
+}
+
+.projector-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #c8102e, #ff5a6a, transparent);
+  box-shadow: 0 0 15px #ff5a6a;
+  pointer-events: none;
+  animation: scan-beam 3.5s ease-in-out infinite;
+}
+
+.projector-live-pulse {
+  animation: live-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.projector-ambient-bg {
+  background-size: 200% 200%;
+  animation: bg-gradient-shift 14s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projector-qr-card,
+  .projector-scanline,
+  .projector-live-pulse,
+  .projector-ambient-bg {
+    animation: none;
+  }
+}
