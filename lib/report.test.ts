@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats, compareScores } from './report'
+import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats, compareScores, recapScores } from './report'
 
 describe('compareScores', () => {
   it('joins pre and post by NIM, computes deltas and averages', () => {
@@ -138,3 +138,49 @@ describe('calculateScoreDistribution', () => {
     expect(dist.tiers.every((t) => t.count === 0 && t.percentage === 0)).toBe(true)
   })
 })
+
+describe('recapScores', () => {
+  it('aggregates scores across sessions, computes session and overall averages', () => {
+    const r = recapScores(
+      ['a', 'b', 'c'],
+      [
+        { session_id: 'a', name: 'Ani', nim: ' 1001 ', prodi: 'S1 TI', score: 60 },
+        { session_id: 'c', name: 'Ani', nim: '1001', prodi: '', score: 80 },
+        { session_id: 'b', name: 'Budi', nim: '1002', prodi: 'S1 SI', score: null },
+        { session_id: 'a', name: 'Budi', nim: '1002', prodi: 'S1 SI', score: 40 },
+      ],
+    )
+    expect(r.rows).toEqual([
+      { nim: '1001', name: 'Ani', prodi: 'S1 TI', scores: [60, null, 80], attended: 2, average: 70 },
+      { nim: '1002', name: 'Budi', prodi: 'S1 SI', scores: [40, null, null], attended: 2, average: 40 },
+    ])
+    expect(r.sessionAverages).toEqual([50, null, 80])
+    expect(r.overall).toBe(60)
+  })
+
+  it('uses name from the latest column', () => {
+    const r = recapScores(
+      ['a', 'b'],
+      [
+        { session_id: 'b', name: 'Ani Putri', nim: '1001', prodi: 'S1 TI', score: 90 },
+        { session_id: 'a', name: 'ani', nim: '1001', prodi: 'S1 TI', score: 70 },
+      ],
+    )
+    expect(r.rows).toEqual([
+      { nim: '1001', name: 'Ani Putri', prodi: 'S1 TI', scores: [70, 90], attended: 2, average: 80 },
+    ])
+  })
+
+  it('ignores attempts of unselected sessions and handles empty input', () => {
+    const r = recapScores(
+      ['a', 'b'],
+      [{ session_id: 'z', name: 'Zack', nim: '9999', prodi: '', score: 100 }],
+    )
+    expect(r).toEqual({
+      rows: [],
+      sessionAverages: [null, null],
+      overall: null,
+    })
+  })
+})
+

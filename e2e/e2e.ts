@@ -36,6 +36,7 @@ async function admin(browser: Browser) {
 
 async function createSession(page: Page, title: string, kind: 'pre' | 'post', mode: 'total' | 'per_question', perQuestion = 45) {
   await page.goto(`${BASE}/admin`)
+  await page.getByRole('button', { name: 'Buat sesi baru' }).click()
   await page.fill('input[name=title]', title)
   await page.selectOption('select[name=kind]', kind)
   await page.selectOption('select[name=timer_mode]', mode)
@@ -338,6 +339,26 @@ try {
   await adminPage.goto(`${BASE}/admin/compare?pre=${preId}&post=${postId}`)
   assert.match(await adminPage.locator('tbody tr', { hasText: 'Ani' }).innerText(), /1001\s+100\s+75\s+-25/)
   log('compare page joins pre/post by NIM with delta')
+  // --- rekap -----------------------------------------------------------------
+  await adminPage.goto(`${BASE}/admin/rekap`)
+  await adminPage.locator(`input[name="s"][value="${preId}"]`).check()
+  await adminPage.locator(`input[name="s"][value="${postId}"]`).check()
+  await adminPage.getByRole('button', { name: 'Tampilkan rekap' }).click()
+  await adminPage.waitForURL(/\/admin\/rekap\?.*s=.*s=/)
+  assert.match(
+    await adminPage.locator('tbody tr', { hasText: 'Ani' }).innerText(),
+    /1001\s+S1 TI\s+100\s+75\s+2\/2\s+87\.5/,
+  )
+  const recapCsv = await (
+    await adminPage.request.get(`${BASE}/admin/rekap/export?s=${preId}&s=${postId}&format=csv`)
+  ).text()
+  assert.match(recapCsv, /Ani,1001,S1 TI,100,75,2,87\.5/)
+  const anonRecapRes = await (await browser.newContext()).request.get(
+    `${BASE}/admin/rekap/export?s=${preId}&s=${postId}&format=csv`,
+  )
+  assert.equal(anonRecapRes.status(), 401)
+  log('rekap page lists many sessions per NIM; CSV export requires admin')
+
 
   // --- automatic close ---------------------------------------------------------------
   // Starting began a 4 × 5 s clock: the session closes by itself and, with nobody working,
@@ -408,6 +429,7 @@ try {
 
   // --- manual questions ----------------------------------------------------------
   await adminPage.goto(`${BASE}/admin`)
+  await adminPage.getByRole('button', { name: 'Buat sesi baru' }).click()
   await adminPage.fill('input[name=title]', 'Manual E2E')
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await adminPage.waitForURL(/\/admin\/sessions\//)
@@ -475,6 +497,7 @@ try {
 
   // --- session date + delete ----------------------------------------------------
   await adminPage.goto(`${BASE}/admin`)
+  await adminPage.getByRole('button', { name: 'Buat sesi baru' }).click()
   await adminPage.fill('input[name=title]', 'Sesi Hapus E2E')
   await adminPage.fill('input[name=held_on]', '2026-10-05')
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
