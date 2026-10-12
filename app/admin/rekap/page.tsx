@@ -5,6 +5,7 @@ import SubmitButton from '@/app/submit-button'
 import { requireAdmin } from '@/lib/admin-auth'
 import { formatDate } from '@/lib/exam'
 import { loadRecap } from './data'
+import RecapTable from './recap-table'
 
 const show = (n: number | null) => (n === null ? '–' : n)
 
@@ -100,66 +101,7 @@ export default async function RekapPage(props: PageProps<'/admin/rekap'>) {
             </div>
           </div>
 
-          <div className="card overflow-x-auto">
-            <table className="w-full text-sm whitespace-nowrap">
-              <thead className="bg-subtle text-left text-xs text-muted">
-                <tr>
-                  <th className="p-3">Nama</th>
-                  <th className="p-3">NIM</th>
-                  <th className="p-3">Prodi</th>
-                  {selected.map((s) => (
-                    <th key={s.id} className="p-3 min-w-44">
-                      <span className="block font-bold text-fg">{s.title}</span>
-                      <span className="block font-normal">
-                        {s.kind === 'pre' ? 'Pre-test' : 'Post-test'} · {formatDate(s.held_on)} · {s.code}
-                      </span>
-                    </th>
-                  ))}
-                  <th className="p-3">Sesi diikuti</th>
-                  <th className="p-3">Rata-rata</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recap.rows.map((r) => (
-                  <tr key={r.nim} className="border-t border-line">
-                    <td className="p-3 font-medium">{r.name}</td>
-                    <td className="p-3 font-mono">{r.nim}</td>
-                    <td className="p-3">{r.prodi || '–'}</td>
-                    {r.scores.map((score, idx) => (
-                      <td key={selected[idx].id} className="p-3">
-                        {show(score)}
-                      </td>
-                    ))}
-                    <td className="p-3">
-                      {r.attended}/{selected.length}
-                    </td>
-                    <td className="p-3 font-semibold">{show(r.average)}</td>
-                  </tr>
-                ))}
-                {!recap.rows.length && (
-                  <tr>
-                    <td colSpan={selected.length + 5} className="p-3 text-muted text-center">
-                      Belum ada peserta.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              <tfoot className="border-t border-line font-semibold bg-subtle">
-                <tr>
-                  <td colSpan={3} className="p-3">
-                    Rata-rata
-                  </td>
-                  {selected.map((s, idx) => (
-                    <td key={s.id} className="p-3">
-                      {show(recap.sessionAverages[idx])}
-                    </td>
-                  ))}
-                  <td className="p-3" />
-                  <td className="p-3 font-bold">{show(recap.overall)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <RecapTable recap={recap} selected={selected} />
         </>
       )}
     </main>
