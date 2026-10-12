@@ -44,6 +44,8 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
     <main className="fixed inset-0 z-50 flex flex-col overflow-auto bg-page lg:flex-row">
       <AutoRefresh />
       <section className="projector-ambient-bg relative flex flex-col justify-between gap-10 bg-gradient-to-br from-band via-[#8f091e] to-band p-8 text-on-band sm:p-12 lg:w-[61%] lg:p-14 overflow-hidden">
+        <div className="projector-ambient-orb-1" />
+        <div className="projector-ambient-orb-2" />
         <div className="pointer-events-none absolute -right-24 -bottom-24 size-96 rounded-full bg-white/5 blur-3xl" />
         <div className="pointer-events-none absolute -left-20 -top-20 size-80 rounded-full bg-black/10 blur-2xl" />
         <div className="flex items-center justify-between gap-4">
@@ -98,13 +100,14 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
       </section>
       <section className="relative flex flex-1 flex-col items-center justify-center gap-5 p-8 overflow-hidden bg-subtle/30">
         <div className="relative group">
+          <div className="projector-qr-backdrop-glow" />
           <div className="projector-hud-reticle">
             <span className="projector-hud-corner projector-hud-corner-tl" />
             <span className="projector-hud-corner projector-hud-corner-tr" />
             <span className="projector-hud-corner projector-hud-corner-bl" />
             <span className="projector-hud-corner projector-hud-corner-br" />
           </div>
-          <div className="projector-qr-card relative aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-5 lg:w-[min(30vw,60vh)] overflow-hidden">
+          <div className="projector-qr-card relative aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-5 lg:w-[min(30vw,60vh)] overflow-hidden shadow-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize */}
             <img src={qr} alt={`QR ${link}`} className="size-full rounded-2xl" />
             <div className="projector-scanline" />
