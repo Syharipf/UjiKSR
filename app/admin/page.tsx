@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { db, must } from '@/lib/db'
 import { cleanTopic, formatDate, isOpen, type Session } from '@/lib/exam'
 import { createSession, logout } from './actions'
-import SessionForm from './session-form'
+import CreateSessionModal from './create-session-modal'
 import SetupError from './setup-error'
 
 type Row = Session & { attempts: { score: number | null }[] }
@@ -88,12 +88,15 @@ export default async function AdminHome() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="display text-4xl">Sesi ujian</h1>
         <div className="flex flex-wrap gap-2">
-          <a href="#buat-sesi" className="btn btn-primary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Buat sesi baru
-          </a>
+          <CreateSessionModal
+            action={createSession}
+            preSessions={sessions
+              .filter((s) => s.kind === 'pre')
+              .map(({ id, title, held_on, code }) => ({ id, title, held_on, code }))}
+          />
+          <Link href="/admin/rekap" className="btn btn-secondary">
+            Rekap nilai <LinkPending />
+          </Link>
           <Link href="/admin/uji-deteksi" className="btn btn-secondary">
             Uji deteksi HP <LinkPending />
           </Link>
@@ -103,7 +106,7 @@ export default async function AdminHome() {
         </div>
       </header>
 
-      {!sessions.length && <p className="card p-6 text-center text-muted">Belum ada sesi. Buat sesi pertama di bawah.</p>}
+      {!sessions.length && <p className="card p-6 text-center text-muted">Belum ada sesi. Klik tombol &quot;Buat sesi baru&quot; di atas untuk membuat sesi pertama.</p>}
 
       <div className="space-y-7">
         {groups.map((g) => (
@@ -171,10 +174,6 @@ export default async function AdminHome() {
         Bandingkan pre-test vs post-test lainnya <LinkPending />
       </Link>
 
-      <section id="buat-sesi" className="card scroll-mt-6 p-4 sm:p-6">
-        <h2 className="display mb-4 text-xl">Buat sesi baru</h2>
-        <SessionForm action={createSession} submitLabel="Buat sesi" preSessions={sessions.filter((s) => s.kind === 'pre').map(({ id, title, held_on, code }) => ({ id, title, held_on, code }))} />
-      </section>
     </main>
   )
 }

@@ -56,6 +56,7 @@ async function run() {
   }
 
   // Create Pre-test session
+  await adminPage.getByRole('button', { name: 'Buat sesi baru' }).click()
   await adminPage.fill('input[name=title]', 'Pre-test Diklat Dasar KSR 2026')
   await adminPage.fill('input[name=held_on]', '2026-10-15')
   await adminPage.selectOption('select[name=kind]', 'pre')
@@ -334,6 +335,7 @@ async function run() {
 
   // Create Post-test session paired with Pre-test
   await adminPage.goto(`${BASE}/admin`)
+  await adminPage.getByRole('button', { name: 'Buat sesi baru' }).click()
   await adminPage.fill('input[name=title]', 'Post-test Diklat Dasar KSR 2026')
   await adminPage.fill('input[name=held_on]', '2026-10-15')
   await adminPage.selectOption('select[name=kind]', 'post')

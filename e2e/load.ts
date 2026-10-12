@@ -41,6 +41,7 @@ async function localSession() {
   await page.fill('input[name=password]', process.env.ADMIN_PASSWORD ?? 'rahasia-e2e')
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await page.waitForURL(`${BASE}/admin`)
+  await page.getByRole('button', { name: 'Buat sesi baru' }).click()
   await page.fill('input[name=title]', `Uji beban ${RUN}`)
   await page.selectOption('select[name=timer_mode]', 'total')
   await page.getByRole('button', { name: 'Buat sesi', exact: true }).click()
