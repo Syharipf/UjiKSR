@@ -76,6 +76,12 @@ export default async function FeedbackQrPage(props: PageProps<'/admin/sessions/[
 
       <section className="relative flex flex-1 flex-col items-center justify-center gap-5 p-8 overflow-hidden bg-subtle/30">
         <div className="relative group">
+          <div className="projector-hud-reticle">
+            <span className="projector-hud-corner projector-hud-corner-tl" />
+            <span className="projector-hud-corner projector-hud-corner-tr" />
+            <span className="projector-hud-corner projector-hud-corner-bl" />
+            <span className="projector-hud-corner projector-hud-corner-br" />
+          </div>
           <div className="projector-qr-card relative aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-5 lg:w-[min(30vw,60vh)] overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL for SVG QR */}
             <img

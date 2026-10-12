@@ -57,12 +57,20 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
           <p className="text-lg text-on-band/90 lg:text-xl">
             Scan QR, atau buka <b>{host}</b> lalu masukkan kode
           </p>
-          <p
+          <div
             aria-label={`Kode sesi ${session.code.split('').join(' ')}`}
-            className="display text-[clamp(3.5rem,8vw,6.5rem)] leading-none tracking-[0.05em] whitespace-nowrap drop-shadow-sm font-black"
+            className="projector-code-wrap select-all font-black"
           >
-            {session.code}
-          </p>
+            {session.code.split('').map((char, index) => (
+              <span
+                key={index}
+                style={{ animationDelay: `${index * 120}ms` }}
+                className="projector-code-char display text-[clamp(2.75rem,6.5vw,5.5rem)] leading-none text-white drop-shadow-md"
+              >
+                {char}
+              </span>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-end gap-x-12 gap-y-4 text-lg">
           <div>
@@ -90,6 +98,12 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
       </section>
       <section className="relative flex flex-1 flex-col items-center justify-center gap-5 p-8 overflow-hidden bg-subtle/30">
         <div className="relative group">
+          <div className="projector-hud-reticle">
+            <span className="projector-hud-corner projector-hud-corner-tl" />
+            <span className="projector-hud-corner projector-hud-corner-tr" />
+            <span className="projector-hud-corner projector-hud-corner-bl" />
+            <span className="projector-hud-corner projector-hud-corner-br" />
+          </div>
           <div className="projector-qr-card relative aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-5 lg:w-[min(30vw,60vh)] overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize */}
             <img src={qr} alt={`QR ${link}`} className="size-full rounded-2xl" />
