@@ -1,11 +1,10 @@
 import Form from 'next/form'
 import Link from 'next/link'
 import LinkPending from '@/app/link-pending'
-import SubmitButton from '@/app/submit-button'
 import { requireAdmin } from '@/lib/admin-auth'
-import { formatDate } from '@/lib/exam'
 import { loadRecap } from './data'
 import RecapTable from './recap-table'
+import SessionSelector from './session-selector'
 
 const show = (n: number | null) => (n === null ? '–' : n)
 
@@ -26,46 +25,23 @@ export default async function RekapPage(props: PageProps<'/admin/rekap'>) {
         <h1 className="display mt-2 text-3xl">Rekap peserta &amp; nilai</h1>
       </header>
 
-      <Form action="/admin/rekap" className="card space-y-3 p-4 sm:p-6">
-        <p className="text-sm font-semibold">Centang sesi yang ingin direkap.</p>
-        {!sessions.length ? (
-          <p className="text-muted">Belum ada sesi.</p>
-        ) : (
-          <ul className="max-h-80 overflow-y-auto divide-y divide-line">
-            {sessions.map((sess) => {
-              const isChecked = selected.some((x) => x.id === sess.id)
-              return (
-                <li key={sess.id}>
-                  <label className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-subtle rounded transition-colors">
-                    <input
-                      type="checkbox"
-                      name="s"
-                      value={sess.id}
-                      defaultChecked={isChecked}
-                      className="size-4 rounded accent-primary"
-                    />
-                    <span
-                      className={`rounded-lg px-2.5 py-1 text-xs font-extrabold ${
-                        sess.kind === 'pre' ? 'bg-navy-soft text-navy' : 'bg-primary-soft text-danger'
-                      }`}
-                    >
-                      {sess.kind === 'pre' ? 'Pre-test' : 'Post-test'}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="font-extrabold">{sess.title}</span>
-                      <span className="block text-xs text-muted">
-                        {formatDate(sess.held_on)} · kode {sess.code}
-                      </span>
-                    </span>
-                  </label>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <div>
-          <SubmitButton className="btn btn-primary">Tampilkan rekap</SubmitButton>
+      <Form action="/admin/rekap" className="card space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-fg">Pilih Sesi Ujian</h2>
+            <p className="text-xs text-muted">
+              Pilih satu atau beberapa sesi untuk menggabungkan rekap data peserta dan nilai.
+            </p>
+          </div>
         </div>
+        {!sessions.length ? (
+          <p className="text-muted text-sm py-4">Belum ada sesi yang dibuat.</p>
+        ) : (
+          <SessionSelector
+            sessions={sessions}
+            initialSelectedIds={selected.map((s) => s.id)}
+          />
+        )}
       </Form>
 
       {recap && (
