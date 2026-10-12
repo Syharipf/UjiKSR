@@ -101,14 +101,14 @@ export default async function RekapPage(props: PageProps<'/admin/rekap'>) {
           </div>
 
           <div className="card overflow-x-auto">
-            <table className="table w-full text-sm">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-subtle text-left text-xs text-muted">
                 <tr>
                   <th className="p-3">Nama</th>
                   <th className="p-3">NIM</th>
                   <th className="p-3">Prodi</th>
                   {selected.map((s) => (
-                    <th key={s.id} className="p-3">
+                    <th key={s.id} className="p-3 min-w-44">
                       <span className="block font-bold text-fg">{s.title}</span>
                       <span className="block font-normal">
                         {s.kind === 'pre' ? 'Pre-test' : 'Post-test'} · {formatDate(s.held_on)} · {s.code}
