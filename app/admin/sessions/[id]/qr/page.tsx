@@ -2,9 +2,10 @@ import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import QRCode from 'qrcode'
 import Brand from '@/app/brand'
+import Confetti from '@/app/exam/[id]/confetti'
 import Prinsip from '@/app/prinsip'
 import { requireAdmin } from '@/lib/admin-auth'
-import { UUID } from '@/lib/attempts'
+import { finalizeExpired, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { hasStarted, isOpen, type Session } from '@/lib/exam'
 import { AutoRefresh, Countdown, FullscreenButton } from '../live'
@@ -23,6 +24,11 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
   const serverNow = Date.now()
   const open = isOpen(session, serverNow)
   const joined = session.attempts[0]?.count ?? 0
+  if (session.started_at) await finalizeExpired(id)
+  const { count: finishedCount, error } = await db().from('attempts').select('id', { count: 'exact', head: true }).eq('session_id', id).not('submitted_at', 'is', null)
+  if (error) throw error
+  const finished = finishedCount ?? 0
+  const allDone = Boolean(session.started_at) && joined > 0 && finished === joined
 
   const h = await headers()
   const host = h.get('host') ?? ''
@@ -30,7 +36,9 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
   // SVG stays sharp at any projector size.
   const qr = `data:image/svg+xml,${encodeURIComponent(await QRCode.toString(link, { type: 'svg', margin: 1 }))}`
 
-  const status = !open
+  const status = allDone
+    ? 'Semua peserta sudah selesai'
+    : !open
     ? session.is_open || session.started_at
       ? 'Sesi sudah ditutup'
       : 'Sesi belum dibuka'
@@ -82,6 +90,12 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
             </div>
             <p className="display text-4xl">{joined}</p>
           </div>
+          {session.started_at && (
+            <div>
+              <p className="text-on-band/80">Selesai</p>
+              <p className="display text-4xl">{finished}<span className="text-on-band/60 text-2xl"> / {joined}</span></p>
+            </div>
+          )}
           {open && session.started_at && !hasStarted(session, serverNow) && (
             <div>
               <p className="text-on-band/80">Ujian dimulai dalam</p>
@@ -118,6 +132,14 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
           <p className="font-medium text-fg">Buka kamera HP atau Google Lens untuk scan</p>
         </div>
       </section>
+      {allDone && (
+        <>
+          <Confetti />
+          <div className="pointer-events-none fixed inset-x-0 top-8 z-10 flex justify-center px-4">
+            <p className="pop-in rounded-full bg-ok px-8 py-4 text-2xl font-bold text-white shadow-2xl lg:text-4xl">Semua peserta sudah selesai</p>
+          </div>
+        </>
+      )}
     </main>
   )
 }
