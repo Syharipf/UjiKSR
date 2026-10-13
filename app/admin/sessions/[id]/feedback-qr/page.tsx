@@ -48,7 +48,7 @@ export default async function FeedbackQrPage(props: PageProps<'/admin/sessions/[
 
         <div className="space-y-4">
           <div className="inline-block rounded-full bg-white/15 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-on-band">
-            Evaluasi &amp; Feedback Post-Test
+            Evaluasi &amp; Feedback
           </div>
           <p className="text-xl font-semibold text-on-band/90 lg:text-2xl">{session.title}</p>
           <h1 className="display text-3xl font-extrabold sm:text-4xl lg:text-5xl text-balance">
