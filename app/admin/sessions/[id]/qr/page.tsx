@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import QRCode from 'qrcode'
 import Brand from '@/app/brand'
 import Confetti from '@/app/exam/[id]/confetti'
-import Prinsip, { PRINSIP } from '@/app/prinsip'
+import Prinsip from '@/app/prinsip'
 import { requireAdmin } from '@/lib/admin-auth'
 import { finalizeExpired, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
@@ -133,45 +133,40 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
         </div>
       </section>
       {allDone && (
-        <div role="status" className="projector-ambient-bg fixed inset-0 z-10 flex flex-col items-center justify-between gap-8 overflow-hidden bg-gradient-to-br from-band via-[#8f091e] to-band p-8 text-center text-on-band sm:p-12">
-          <div className="projector-ambient-orb-1" />
-          <div className="projector-ambient-orb-2" />
+        <div role="status" className="fixed inset-0 z-10 flex flex-col overflow-hidden bg-page text-center text-fg">
+          <div aria-hidden className="h-2 shrink-0 bg-band" />
+          <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 size-[42rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           <Confetti />
-          <div className="done-rise">
-            <Brand onBand />
+          <div className="done-rise relative flex justify-center p-8">
+            <Brand />
           </div>
-          <div className="relative flex flex-col items-center gap-6">
-            <div className="relative">
-              <div className="done-halo absolute -inset-6 rounded-full bg-white/20 blur-2xl" />
-              <svg viewBox="0 0 110 110" aria-hidden className="relative size-32 lg:size-40">
-                <circle cx="55" cy="55" r="48" fill="rgba(255,255,255,0.12)" stroke="white" strokeWidth="6" className="done-check-ring" />
-                <path d="M33 56l15 15 29-31" fill="none" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" className="done-check-mark" />
+          <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-8">
+            <div className="relative text-primary">
+              <div className="done-halo absolute -inset-5 rounded-full bg-primary/15 blur-xl" />
+              <svg viewBox="0 0 110 110" aria-hidden className="relative size-28 lg:size-36">
+                <circle cx="55" cy="55" r="48" fill="var(--surface)" stroke="currentColor" strokeWidth="6" className="done-check-ring" />
+                <path d="M33 56l15 15 29-31" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" className="done-check-mark" />
               </svg>
             </div>
-            <p className="done-rise text-xl font-semibold text-on-band/85 lg:text-2xl" style={{ animationDelay: '300ms' }}>
+            <p className="done-rise text-xl font-semibold text-muted lg:text-2xl" style={{ animationDelay: '300ms' }}>
               {session.title}
             </p>
-            <h2 className="done-rise display text-[clamp(2.5rem,6vw,5rem)] leading-tight text-white drop-shadow-md" style={{ animationDelay: '450ms' }}>
+            <h2 className="done-rise display text-[clamp(2.5rem,6vw,5rem)] leading-tight text-navy-text" style={{ animationDelay: '450ms' }}>
               Semua peserta sudah selesai
             </h2>
-            <p className="done-rise text-xl text-on-band/90 lg:text-2xl" style={{ animationDelay: '600ms' }}>
-              <b className="display text-3xl text-white lg:text-4xl">{finished}</b> peserta telah mengumpulkan jawaban. Terima kasih, salam kemanusiaan!
+            <p className="done-rise text-xl text-secondary lg:text-2xl" style={{ animationDelay: '600ms' }}>
+              <b className="display text-3xl text-primary lg:text-4xl">{finished}</b> peserta telah mengumpulkan jawaban. Terima kasih!
             </p>
+            <div className="done-rise mt-4 space-y-1" style={{ animationDelay: '850ms' }}>
+              <p className="text-[clamp(1.75rem,3.5vw,3rem)] font-semibold italic text-primary">“Siamo tutti fratelli”</p>
+              <p className="text-sm tracking-[0.2em] text-muted uppercase">Kita semua bersaudara · Solferino, 1859</p>
+            </div>
           </div>
-          <div className="done-rise w-full max-w-3xl space-y-3" style={{ animationDelay: '800ms' }}>
-            <p className="text-sm font-semibold tracking-[0.25em] text-on-band/80 uppercase">7 Prinsip Dasar Gerakan Palang Merah dan Bulan Sabit Merah</p>
-            <Prinsip className="text-white/80" />
-            <p className="grid grid-cols-7 gap-1 text-[0.7rem] text-on-band/75 lg:text-sm">
-              {PRINSIP.map((p) => (
-                <span key={p}>{p}</span>
-              ))}
+          {open && (
+            <p className="relative p-8 text-sm text-muted">
+              Peserta susulan masih bisa masuk dengan kode <b className="font-mono text-fg">{session.code}</b>
             </p>
-            {open && (
-              <p className="pt-2 text-sm text-on-band/75">
-                Peserta susulan masih bisa masuk dengan kode <b className="font-mono text-white">{session.code}</b>
-              </p>
-            )}
-          </div>
+          )}
         </div>
       )}
     </main>
