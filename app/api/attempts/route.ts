@@ -1,6 +1,7 @@
 import { handle, readJson } from '@/lib/api'
 import { db, must } from '@/lib/db'
 import { isValidNim, NIM_MAX } from '@/lib/nim'
+import { normalizeProdi } from '@/lib/prodi'
 import { buildOrder, ExamError, isOpen, timing, type Question, type Session } from '@/lib/exam'
 
 export async function POST(req: Request) {
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
     const code = String(body.code ?? '').trim().toUpperCase()
     const name = String(body.name ?? '').trim()
     const nim = String(body.nim ?? '').trim()
-    const prodi = String(body.prodi ?? '').trim()
+    const prodi = normalizeProdi(String(body.prodi ?? ''))
     if (!name || name.length > 100) throw new ExamError(400, 'Nama wajib diisi (maks. 100 karakter)')
     if (!isValidNim(nim)) throw new ExamError(400, `NIM wajib diisi, hanya angka (maks. ${NIM_MAX} digit)`)
     if (!prodi || prodi.length > 100) throw new ExamError(400, 'Prodi wajib diisi (maks. 100 karakter)')
