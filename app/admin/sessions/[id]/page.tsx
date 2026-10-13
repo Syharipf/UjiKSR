@@ -174,6 +174,16 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                           ? 'Sesi ditutup otomatis — waktu ujian sudah habis.'
                           : 'Sesi ditutup — peserta belum bisa masuk.'}
                   </p>
+                  {open && session.started_at && attempts.length > 0 && working === 0 && (
+                    <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ok-soft p-3">
+                      <p className="text-sm font-semibold text-ok">Semua {attempts.length} peserta sudah selesai. Tutup sesi jika tidak ada peserta susulan; nilai langsung terlihat di HP peserta.</p>
+                      <form action={setOpen.bind(null, id, false)}>
+                        <SubmitButton confirm="Tutup sesi dan tampilkan nilai ke semua peserta? Peserta susulan tidak bisa masuk lagi." className="btn btn-primary text-sm">
+                          Tutup sesi &amp; tampilkan nilai
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  )}
                   <p className="text-sm text-muted">
                     <ScoreStatus results={results} working={working} serverNow={serverNow} />
                   </p>
