@@ -396,6 +396,46 @@ body {
   }
 }
 
+/* Projector: everyone finished (app/admin/sessions/[id]/qr/page.tsx). */
+.done-rise {
+  animation: done-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes done-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+.done-check-ring {
+  stroke-dasharray: 302;
+  stroke-dashoffset: 302;
+  animation: done-draw 900ms 200ms ease-out forwards;
+}
+.done-check-mark {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: done-draw 500ms 1000ms ease-out forwards;
+}
+@keyframes done-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.done-halo {
+  animation: qr-aura-breath 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .done-rise,
+  .done-halo {
+    animation: none;
+  }
+  .done-check-ring,
+  .done-check-mark {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
 /* Projector mode animations */
 @keyframes pulse-glow {
   0%, 100% {

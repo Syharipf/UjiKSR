@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import QRCode from 'qrcode'
 import Brand from '@/app/brand'
 import Confetti from '@/app/exam/[id]/confetti'
-import Prinsip from '@/app/prinsip'
+import Prinsip, { PRINSIP } from '@/app/prinsip'
 import { requireAdmin } from '@/lib/admin-auth'
 import { finalizeExpired, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
@@ -133,12 +133,46 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
         </div>
       </section>
       {allDone && (
-        <>
+        <div role="status" className="projector-ambient-bg fixed inset-0 z-10 flex flex-col items-center justify-between gap-8 overflow-hidden bg-gradient-to-br from-band via-[#8f091e] to-band p-8 text-center text-on-band sm:p-12">
+          <div className="projector-ambient-orb-1" />
+          <div className="projector-ambient-orb-2" />
           <Confetti />
-          <div className="pointer-events-none fixed inset-x-0 top-8 z-10 flex justify-center px-4">
-            <p className="pop-in rounded-full bg-ok px-8 py-4 text-2xl font-bold text-white shadow-2xl lg:text-4xl">Semua peserta sudah selesai</p>
+          <div className="done-rise">
+            <Brand onBand />
           </div>
-        </>
+          <div className="relative flex flex-col items-center gap-6">
+            <div className="relative">
+              <div className="done-halo absolute -inset-6 rounded-full bg-white/20 blur-2xl" />
+              <svg viewBox="0 0 110 110" aria-hidden className="relative size-32 lg:size-40">
+                <circle cx="55" cy="55" r="48" fill="rgba(255,255,255,0.12)" stroke="white" strokeWidth="6" className="done-check-ring" />
+                <path d="M33 56l15 15 29-31" fill="none" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" className="done-check-mark" />
+              </svg>
+            </div>
+            <p className="done-rise text-xl font-semibold text-on-band/85 lg:text-2xl" style={{ animationDelay: '300ms' }}>
+              {session.title}
+            </p>
+            <h2 className="done-rise display text-[clamp(2.5rem,6vw,5rem)] leading-tight text-white drop-shadow-md" style={{ animationDelay: '450ms' }}>
+              Semua peserta sudah selesai
+            </h2>
+            <p className="done-rise text-xl text-on-band/90 lg:text-2xl" style={{ animationDelay: '600ms' }}>
+              <b className="display text-3xl text-white lg:text-4xl">{finished}</b> peserta telah mengumpulkan jawaban. Terima kasih, salam kemanusiaan!
+            </p>
+          </div>
+          <div className="done-rise w-full max-w-3xl space-y-3" style={{ animationDelay: '800ms' }}>
+            <p className="text-sm font-semibold tracking-[0.25em] text-on-band/80 uppercase">7 Prinsip Dasar Gerakan Palang Merah dan Bulan Sabit Merah</p>
+            <Prinsip className="text-white/80" />
+            <p className="grid grid-cols-7 gap-1 text-[0.7rem] text-on-band/75 lg:text-sm">
+              {PRINSIP.map((p) => (
+                <span key={p}>{p}</span>
+              ))}
+            </p>
+            {open && (
+              <p className="pt-2 text-sm text-on-band/75">
+                Peserta susulan masih bisa masuk dengan kode <b className="font-mono text-white">{session.code}</b>
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </main>
   )
