@@ -35,7 +35,8 @@ function report(phase: string, results: Result[]) {
 
 // Local stack only: log in as admin and create an open total-mode session with the sample questions.
 async function localSession() {
-  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium-browser' })
+  const executablePath = process.env.CHROMIUM_PATH ?? ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find((p) => require('fs').existsSync(p))
+  const browser = await chromium.launch({ executablePath })
   const page = await browser.newPage()
   await page.goto(`${BASE}/admin/login`)
   await page.fill('input[name=password]', process.env.ADMIN_PASSWORD ?? 'rahasia-e2e')
@@ -47,10 +48,12 @@ async function localSession() {
   await page.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await page.waitForURL(/\/admin\/sessions\//)
   const code = (await page.locator('text=/kode [A-Z0-9]{6}/').innerText()).match(/kode ([A-Z0-9]{6})/)![1]
-  await page.click('summary:has-text("Upload CSV")')
+  await page.click('button:has-text("Soal")')
+  await page.click('summary:has-text("Upload file soal")')
   await page.setInputFiles('input[type=file]', new URL('../public/contoh-soal.csv', import.meta.url).pathname)
   await page.click('text=Upload & ganti semua soal')
   await page.getByText('soal tersimpan').waitFor()
+  await page.click('button:has-text("Kontrol")')
   await page.click('text=Buka sesi')
   await page.getByText('Lobi dibuka —').waitFor()
   const start = async () => {
