@@ -55,7 +55,7 @@
 - **Duplikat sesi**: Salin seluruh bank soal dan pengaturan dari Pre-test ke Post-test dalam satu klik.
 - **Input soal fleksibel**: Form manual interaktif atau upload file Excel (.xlsx dengan auto-width) dan CSV.
 - **Analisis butir soal**: Persentase akurasi jawaban benar per nomor soal dengan visualisasi warna untuk mendeteksi materi yang sulit.
-- **Halaman Tayangkan QR & kode**: Khusus proyektor/share-screen dengan QR besar aman tanpa membocorkan kunci jawaban; buka sesi instan dan tutup otomatis sesuai durasi.
+- **Halaman Tayangkan QR & kode (Mode Proyektor)**: Khusus proyektor/share-screen dengan QR tajam (SVG), animasi pemindai laser HUD, ambient glow, kode sesi animasi, serta transisi selebrasi otomatis saat semua peserta selesai tanpa membocorkan kunci jawaban.
 - **Live monitor peserta (3 detik)**: Statistik ringkas (rata-rata, tertinggi, terendah), pencarian & filter, salin link darurat pengerjaan peserta, *force submit* (paksa kumpul semua), dan log rincian pelanggaran.
 - **Bandingkan pre-test vs post-test**: Analisis komparasi nilai per peserta (dicocokkan otomatis lewat NIM) dengan visualisasi delta peningkatan nilai dan statistik agregat.
 - **Export & kelola**: Export hasil ke Excel (.xlsx dengan auto-width rapi dan zona waktu Jakarta) atau CSV, reset per peserta atau semua, dan hapus sesi.
