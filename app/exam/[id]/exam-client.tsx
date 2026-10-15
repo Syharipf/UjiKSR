@@ -779,9 +779,6 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
           <span className="shrink-0">NIM {view.nim}</span>
         </div>
 
-        <Link href="/" className="btn btn-secondary mt-auto h-13 w-full text-base">
-          Kembali ke beranda
-        </Link>
       </main>
     </div>
   )
