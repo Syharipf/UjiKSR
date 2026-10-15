@@ -56,7 +56,11 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
   return (
     <main className="fixed inset-0 z-50 flex flex-col overflow-auto bg-page lg:flex-row">
       <AutoRefresh />
-      <section className="flex flex-col justify-between gap-10 bg-band p-8 text-on-band sm:p-12 lg:w-[61%] lg:px-16 lg:py-14">
+      <section className="projector-ambient-bg relative flex flex-col justify-between gap-10 bg-gradient-to-br from-band via-[#8f091e] to-band p-8 text-on-band sm:p-12 lg:w-[61%] lg:px-16 lg:py-14 overflow-hidden">
+        <div className="projector-ambient-orb-1" />
+        <div className="projector-ambient-orb-2" />
+        <div className="pointer-events-none absolute -right-24 -bottom-24 size-96 rounded-full bg-white/5 blur-3xl" />
+        <div className="pointer-events-none absolute -left-20 -top-20 size-80 rounded-full bg-black/10 blur-2xl" />
         <div className="flex items-center justify-between gap-4">
           <Brand onBand />
           <div className="hide-in-fullscreen shrink-0">
@@ -68,13 +72,27 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
           <p className="text-lg opacity-90 lg:text-xl">
             Scan QR, atau buka <b>{host}</b> lalu masukkan kode
           </p>
-          <p aria-label={`Kode sesi ${session.code.split('').join(' ')}`} className="display text-[clamp(3rem,8vw,6.5rem)] leading-none tracking-[0.03em] whitespace-nowrap select-all">
-            {session.code}
-          </p>
+          <div
+            aria-label={`Kode sesi ${session.code.split('').join(' ')}`}
+            className="projector-code-wrap select-all font-black"
+          >
+            {session.code.split('').map((char, index) => (
+              <span
+                key={index}
+                style={{ animationDelay: `${index * 120}ms` }}
+                className="projector-code-char display text-[clamp(2.75rem,6.5vw,5.5rem)] leading-none text-white drop-shadow-md"
+              >
+                {char}
+              </span>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-end gap-x-12 gap-y-4 text-lg">
           <div>
-            <p className="opacity-80">{session.started_at ? 'Peserta' : 'Peserta masuk'}</p>
+            <div className="flex items-center gap-2 opacity-80">
+              <span className="projector-live-pulse inline-block size-2 rounded-full bg-ok shadow-[0_0_8px_#4fd18b]" />
+              <span>{session.started_at ? 'Peserta' : 'Peserta masuk'}</span>
+            </div>
             <p className="display text-4xl">{joined}</p>
           </div>
           {session.started_at && (
@@ -107,12 +125,25 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
           <span key={i} className="bg-band" />
         ))}
       </div>
-      <section className="flex flex-1 flex-col items-center justify-center gap-5 p-8">
-        <div className="aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-6 shadow-[0_24px_60px_-24px_rgba(11,21,39,0.45)] lg:w-[min(30vw,60vh)]">
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize */}
-          <img src={qr} alt={`QR ${link}`} className="size-full" />
+      <section className="relative flex flex-1 flex-col items-center justify-center gap-5 p-8 overflow-hidden bg-subtle/30">
+        <div className="relative group">
+          <div className="projector-qr-backdrop-glow" />
+          <div className="projector-hud-reticle">
+            <span className="projector-hud-corner projector-hud-corner-tl" />
+            <span className="projector-hud-corner projector-hud-corner-tr" />
+            <span className="projector-hud-corner projector-hud-corner-bl" />
+            <span className="projector-hud-corner projector-hud-corner-br" />
+          </div>
+          <div className="projector-qr-card relative aspect-square w-[min(80vw,52vh)] rounded-3xl bg-white p-5 lg:w-[min(30vw,60vh)] overflow-hidden shadow-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize */}
+            <img src={qr} alt={`QR ${link}`} className="size-full rounded-2xl" />
+            <div className="projector-scanline" />
+          </div>
         </div>
-        <p className="text-muted">Buka dengan kamera HP atau Google Lens</p>
+        <div className="flex items-center gap-2 rounded-full bg-surface px-4 py-1.5 shadow-sm border border-line text-sm">
+          <span className="inline-block size-2 rounded-full bg-primary animate-ping" />
+          <p className="font-medium text-fg">Buka kamera HP atau Google Lens untuk scan</p>
+        </div>
       </section>
       {allDone && (
         <div role="status" className="fixed inset-0 z-10 overflow-hidden bg-bar text-white">
