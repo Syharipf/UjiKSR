@@ -97,9 +97,6 @@ export default async function AdminHome() {
           <Link href="/admin/rekap" className="btn btn-secondary">
             Rekap nilai <LinkPending />
           </Link>
-          <Link href="/admin/uji-deteksi" className="btn btn-secondary">
-            Uji deteksi HP <LinkPending />
-          </Link>
           <form action={logout}>
             <SubmitButton className="btn btn-secondary">Keluar</SubmitButton>
           </form>
