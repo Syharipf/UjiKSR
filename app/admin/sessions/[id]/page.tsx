@@ -7,7 +7,7 @@ import { finalizeExpired, resultsStatus, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { formatDate, hasStarted, isOpen, type Attempt, type Question, type ResultsStatus, type Session } from '@/lib/exam'
 import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats } from '@/lib/report'
-import { deleteQuestion, deleteSession, duplicateSession, forceSubmitAll, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
+import { deleteQuestion, deleteSession, duplicateSession, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
 import LinkPending from '@/app/link-pending'
 import ParticipantsTable from './participants-table'
 import SessionCharts from './session-charts'
@@ -203,9 +203,24 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                         Tayangkan QR Feedback
                       </a>
                     )}
-                    <form action={setOpen.bind(null, id, !open)}>
-                      <SubmitButton className={`btn ${open ? 'btn-secondary' : 'btn-primary'}`}>{open ? 'Tutup sesi' : 'Buka sesi'}</SubmitButton>
-                    </form>
+                    {!open ? (
+                      <form action={setOpen.bind(null, id, true)}>
+                        <SubmitButton className="btn btn-primary">Buka sesi</SubmitButton>
+                      </form>
+                    ) : session.started_at ? (
+                      <form action={setOpen.bind(null, id, false)}>
+                        <SubmitButton
+                          confirm={
+                            working > 0
+                              ? `Tutup sesi sekarang? Ujian langsung selesai dan jawaban ${working} peserta yang masih mengerjakan akan dikumpulkan paksa.`
+                              : 'Tutup sesi sekarang dan tampilkan nilai ke peserta?'
+                          }
+                          className="btn btn-secondary"
+                        >
+                          Tutup sesi
+                        </SubmitButton>
+                      </form>
+                    ) : null}
                   </div>
                   <p className="text-xs text-muted">Untuk proyektor atau share screen, tayangkan halaman QR (tab baru), bukan halaman ini: daftar soal di bawah memuat kunci jawaban.</p>
                 </section>
@@ -258,16 +273,6 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="display text-lg">Peserta ({attempts.length})</h2>
                 <div className="flex flex-wrap gap-2">
-                  {working > 0 && (
-                    <form action={forceSubmitAll.bind(null, id)}>
-                      <SubmitButton
-                        confirm={`Paksa kumpulkan ${working} peserta yang masih mengerjakan sekarang? Ujian mereka akan langsung diakhiri.`}
-                        className="btn btn-danger text-sm"
-                      >
-                        Paksa kumpul ({working})
-                      </SubmitButton>
-                    </form>
-                  )}
                   <a href={`/admin/sessions/${id}/export?format=xlsx`} className="btn btn-secondary text-sm">
                     Export Excel
                   </a>

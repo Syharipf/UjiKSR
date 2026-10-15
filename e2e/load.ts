@@ -6,6 +6,7 @@
 // press "Mulai ujian" in /admin once everyone has joined, and delete that session afterwards, which
 // removes the fake participants.
 // Without CODE it runs against the local `bun run e2e` stack and sets the session up itself.
+import fs from 'node:fs'
 import { chromium } from 'playwright-core'
 
 const BASE = process.env.BASE ?? 'http://localhost:3100'
@@ -35,7 +36,7 @@ function report(phase: string, results: Result[]) {
 
 // Local stack only: log in as admin and create an open total-mode session with the sample questions.
 async function localSession() {
-  const executablePath = process.env.CHROMIUM_PATH ?? ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find((p) => require('fs').existsSync(p))
+  const executablePath = process.env.CHROMIUM_PATH ?? ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find((p) => fs.existsSync(p))
   const browser = await chromium.launch({ executablePath })
   const page = await browser.newPage()
   await page.goto(`${BASE}/admin/login`)
@@ -63,6 +64,7 @@ async function localSession() {
     await page.getByText('Soal muncul di HP peserta dalam').waitFor()
   }
   const close = async () => {
+    page.once('dialog', (dlg) => dlg.accept())
     await page.click('text=Tutup sesi')
     await page.getByText('Sesi ditutup —').waitFor()
     await browser.close()

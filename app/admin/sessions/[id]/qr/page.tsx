@@ -27,6 +27,7 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
   if (error) throw error
   const finished = finishedCount ?? 0
   const allDone = Boolean(session.started_at) && joined > 0 && finished === joined
+  const showDone = Boolean(session.started_at) && !open && joined > 0
 
   const h = await headers()
   const host = h.get('host') ?? ''
@@ -145,7 +146,7 @@ export default async function QrDisplayPage(props: PageProps<'/admin/sessions/[i
           <p className="font-medium text-fg">Buka kamera HP atau Google Lens untuk scan</p>
         </div>
       </section>
-      {allDone && (
+      {showDone && (
         <div role="status" className="fixed inset-0 z-10 overflow-hidden bg-bar text-white">
           <div aria-hidden className="done-grid absolute inset-0 flex items-center justify-center pb-24" style={{ gap: dot * 1.5 }}>
             {shades.map((color, c) => (

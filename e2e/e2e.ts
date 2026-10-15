@@ -376,28 +376,16 @@ try {
   log('reopening a session whose exam is over opens a fresh lobby')
 
   // --- closed session and score release -------------------------------------------
-  // Budi is still working (per-question, 4 × 5 s) when the session closes and never answers, so
-  // scores stay hidden until his time runs out; then everyone's score appears together.
+  // Budi is still working when the committee closes the session; closing force-submits all active
+  // participants immediately and releases scores.
   const late = await participant(browser, post.code, 'Budi', '1004', false)
   await startExam(adminPage, post.url)
   await late.page.getByText('Soal 1 dari 4').waitFor(STARTED)
   await adminPage.goto(post.url)
+  adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.getByRole('button', { name: 'Tutup sesi', exact: true }).click()
   await adminPage.getByText('Sesi ditutup —').waitFor()
-  await adminPage.getByText('1 peserta masih mengerjakan').waitFor()
-  const adminClock = adminPage.locator('main span.font-mono')
-  const before = await adminClock.innerText()
-  assert.match(before, /^0:[0-2]\d$/)
-  await sleep(1500)
-  assert.notEqual(await adminClock.innerText(), before)
-  log('admin sees a live countdown to the score release')
-  const seen = p.views.length // her score was out once already, before the session reopened
-  await p.page.reload()
-  await p.page.getByText('Nilai semua peserta muncul serentak dalam').waitFor()
-  assert.match(await p.page.locator('main p[role=timer]').innerText(), /^0:[0-2]\d$/)
-  assert.ok(p.views.slice(seen).every((v) => !v.includes('"score"')))
-  log('after closing, a finished participant sees a countdown to the shared release time')
-
+  log('closing session force-submits working participants and releases scores immediately')
   // No reloads from here: both pages must pick the score up on their own.
   const shown = async (page: Page) => {
     await page.getByText('Nilaimu').waitFor({ timeout: 35_000 })
@@ -412,7 +400,7 @@ try {
   await adminPage.click('button:has-text("Peserta")')
   await adminPage.getByRole('cell', { name: 'Waktu habis' }).waitFor({ timeout: 10_000 })
   assert.ok(await adminPage.getByRole('cell', { name: 'Waktu habis' }).isVisible())
-  log('when the countdown ends, every participant sees their score at about the same time; admin page updates itself')
+  log('every participant sees their score immediately after session is closed; admin page updates itself')
 
   const closed = await (await browser.newContext()).newPage()
   await closed.goto(`${BASE}/s/${post.code}`)

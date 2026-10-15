@@ -320,6 +320,7 @@ async function run() {
   await phoneEka.close()
 
   await adminPage.goto(preUrl)
+  adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.getByRole('button', { name: 'Tutup sesi', exact: true }).click()
   await adminPage.getByText('Sesi ditutup —').waitFor()
 
@@ -424,6 +425,7 @@ async function run() {
 
   // Close Post-test
   await adminPage.goto(postUrl)
+  adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.getByRole('button', { name: 'Tutup sesi', exact: true }).click()
   await adminPage.getByText('Sesi ditutup —').waitFor()
 

@@ -178,7 +178,12 @@ export async function setOpen(id: string, open: boolean) {
     const opened = must(await (s.started_at === null ? update.is('started_at', null) : update.eq('started_at', s.started_at)).select('id'))
     if (!opened.length) return back(id, 'Status sesi berubah — muat ulang halaman lalu coba lagi')
   } else {
-    must(await db().from('exam_sessions').update(fields).eq('id', id))
+    const s = await timerRow(id)
+    if (s.started_at) {
+      await attemptsForceSubmitAll(id)
+    } else {
+      must(await db().from('exam_sessions').update(fields).eq('id', id))
+    }
   }
   back(id, open ? 'Sesi dibuka' : 'Sesi ditutup')
 }
