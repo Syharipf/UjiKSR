@@ -210,7 +210,7 @@ docs/                    buku panduan + screenshot
 
 - **[Buku Panduan](docs/PANDUAN.md)** untuk panitia dan peserta: langkah demi langkah, checklist hari-H, dan pemecahan masalah.
 - [Spesifikasi desain](docs/superpowers/specs/2026-09-27-ujian-ksr-anticheat-design.md)
-- [`CLAUDE.md`](CLAUDE.md): catatan arsitektur untuk pengembang.
+- [`AGENTS.md`](AGENTS.md): catatan arsitektur dan panduan agen pengembang.
 
 ## Lisensi
 
