@@ -9,7 +9,7 @@ import { parseQuestionsCsv, toQuestion } from '@/lib/csv'
 import { parseQuestionsXlsx } from '@/lib/excel'
 import { finishRound, forceSubmitAll as attemptsForceSubmitAll, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
-import { cleanTopic, deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
+import { cleanTopic, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
 const back = (id: string, msg: string, tab?: string) =>
   redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}${tab ? `&tab=${tab}` : ''}`)
@@ -161,19 +161,15 @@ type TimerRow = Pick<Session, TimerField | 'is_open' | 'closes_at' | 'started_at
 const timerRow = async (id: string): Promise<TimerRow> =>
   must(await db().from('exam_sessions').select('is_open, closes_at, started_at, timer_mode, duration_sec, per_question_sec, questions(count)').eq('id', id).single())
 
-// Opening a new session (or one whose exam is over) opens the lobby: participants join and wait for
-// "Mulai ujian". Reopening an exam still running lets latecomers in for the time left.
+// Opening a session opens the lobby: participants join and wait for "Mulai ujian".
 export async function setOpen(id: string, open: boolean) {
   await requireAdmin()
-  const fields: Partial<Session> = { is_open: open, closes_at: null }
   if (open) {
     const s = await timerRow(id)
-    const end = s.started_at && deadlineFor(s, s.questions[0]?.count ?? 0, new Date(s.started_at))
-    if (end && end.getTime() > Date.now()) fields.closes_at = end.toISOString()
-    else if (s.started_at) {
-      await finishRound(id) // finish the last round's leftovers before clearing its clock
-      fields.started_at = null
+    if (s.started_at) {
+      await finishRound(id)
     }
+    const fields: Partial<Session> = { is_open: true, started_at: null, closes_at: null }
     const update = db().from('exam_sessions').update(fields).eq('id', id)
     const opened = must(await (s.started_at === null ? update.is('started_at', null) : update.eq('started_at', s.started_at)).select('id'))
     if (!opened.length) return back(id, 'Status sesi berubah — muat ulang halaman lalu coba lagi')
@@ -182,7 +178,7 @@ export async function setOpen(id: string, open: boolean) {
     if (s.started_at) {
       await attemptsForceSubmitAll(id)
     } else {
-      must(await db().from('exam_sessions').update(fields).eq('id', id))
+      must(await db().from('exam_sessions').update({ is_open: false, closes_at: null }).eq('id', id))
     }
   }
   back(id, open ? 'Sesi dibuka' : 'Sesi ditutup')
