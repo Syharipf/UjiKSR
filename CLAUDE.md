@@ -24,6 +24,10 @@ BASE=https://ujiksr.vercel.app CODE=ABC123 N=150 bun e2e/load.ts   # load test a
 
 E2E notes: set `CHROMIUM_PATH` if Chromium isn't at `/usr/bin/chromium-browser`; logs and failure screenshots land in `e2e/.bin/`. PGlite drops the connection on any SQL error, so DB error paths (e.g. duplicate NIM → 23505) are covered only by `supabase/schema.test.ts`, not by E2E.
 
+## Workflow Rules
+
+- **Selalu commit**: Setiap ada perubahan kode atau konfigurasi yang selesai dan terverifikasi, langsung buat git commit.
+
 ## Architecture
 
 - **Trust boundary**: the browser never talks to Supabase. `lib/db.ts` (secret key, bypasses RLS) is server-only; RLS is enabled with no policies. The answer key (`answer_index`) never leaves the server — `buildView` in `lib/exam.ts` is the only shape sent to participants. A participant's own `score` is included only once `resultsStatus()` (`lib/attempts.ts`) says the session is closed and nobody is still working; until then it reports `results_at` (the later of the session's `closes_at` and the last deadline) for the participants' countdown. "Buka sesi" opens a lobby (`started_at` null): participants join and wait, no clock runs and no questions are sent. "Mulai ujian" (`startExam`) sets the session's `started_at` = now + `START_DELAY_MS` (so every polling phone learns it in time) and `closes_at` = that + the exam's duration, and re-times lobby attempts to it; a join that lands mid-start is re-timed lazily in `sync`. Every attempt's clock starts at the session's `started_at`, so latecomers get only the time left. Past `closes_at` the session counts as closed (`isOpen` in `lib/exam.ts`, evaluated on read, no cron). Closing by hand clears `closes_at`; reopening restores it while the exam still runs, otherwise opens a fresh lobby. "Reset semua" also returns the session to the lobby.
