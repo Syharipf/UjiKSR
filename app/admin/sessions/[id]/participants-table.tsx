@@ -1,6 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { VIOLATION_LABELS } from '@/lib/violations'
+
+import { useMemo, useRef, useState } from 'react'
 import SubmitButton from '@/app/submit-button'
 import type { Attempt } from '@/lib/exam'
 import { resetAttempt } from '../../actions'
@@ -21,18 +23,13 @@ const STATUS_STYLE: Record<string, string> = {
   waiting: 'bg-primary-soft text-primary',
 }
 
-const VIOLATION_LABELS: Record<string, string> = {
-  hidden: 'pindah aplikasi/tab',
-  blur: 'hilang fokus',
-  fullscreen_exit: 'keluar layar penuh',
-  resize: 'layar mengecil (split screen)',
-  reopen: 'membuka ulang ujian',
-}
 
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
 type FilterTab = 'all' | 'working' | 'finished' | 'violations'
+const INITIAL_BATCH = 20
+const BATCH_SIZE = 15
 
 export default function ParticipantsTable({
   sessionId,
@@ -50,7 +47,15 @@ export default function ParticipantsTable({
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterTab>('all')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [prevFilterKey, setPrevFilterKey] = useState('')
+  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  const filterKey = `${search}|${filter}`
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey)
+    setVisibleCount(INITIAL_BATCH)
+  }
   const byAttempt = useMemo(() => {
     const map = new Map<string, Violation[]>()
     for (const v of violations) {
@@ -84,6 +89,19 @@ export default function ParticipantsTable({
     })
   }, [attempts, search, filter])
 
+
+  // Infinite scroll listener when user scrolls near the bottom of the table container
+  const handleScroll = () => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (el.scrollHeight - el.scrollTop <= el.clientHeight + 80) {
+      if (visibleCount < filtered.length) {
+        setVisibleCount((prev) => Math.min(prev + BATCH_SIZE, filtered.length))
+      }
+    }
+  }
+
+  const visibleAttempts = filtered.slice(0, visibleCount)
   // Questions done (per question: passed; total: answered).
   const progress = (a: Attempt) => (a.submitted_at ? a.question_order.length : perQuestion ? a.current_index : Object.keys(a.answers).length)
 
@@ -153,10 +171,14 @@ export default function ParticipantsTable({
           </button>
         </div>
       </div>
-
-      <div className="card overflow-x-auto">
+      {/* Compact table container with fixed max height and sticky header */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="card max-h-[460px] overflow-auto overscroll-contain"
+      >
         <table className="w-full text-sm">
-          <thead className="bg-subtle text-left text-xs text-muted">
+          <thead className="sticky top-0 z-10 bg-subtle text-left text-xs text-muted shadow-xs">
             <tr>
               <th className="p-3">Nama</th>
               <th className="p-3">NIM</th>
@@ -169,7 +191,7 @@ export default function ParticipantsTable({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((a) => (
+            {visibleAttempts.map((a) => (
               <tr key={a.id} className="border-t border-line align-top">
                 <td className="p-3 font-medium">{a.name}</td>
                 <td className="p-3 font-mono text-xs">{a.nim}</td>
@@ -230,7 +252,15 @@ export default function ParticipantsTable({
             )}
           </tbody>
         </table>
+        {visibleCount < filtered.length && (
+          <div className="py-2.5 text-center text-xs text-muted font-medium bg-subtle/40 border-t border-line animate-pulse">
+            Scroll ke bawah untuk memuat peserta lainnya ({visibleCount} dari {filtered.length})...
+          </div>
+        )}
       </div>
+      <p className="text-right text-xs text-muted">
+        Menampilkan {visibleAttempts.length} dari {filtered.length} peserta{filtered.length < attempts.length ? ` (terfilter dari ${attempts.length})` : ''}
+      </p>
     </div>
   )
 }
@@ -238,12 +268,17 @@ export default function ParticipantsTable({
 function Progress({ done, total }: Readonly<{ done: number; total: number }>) {
   return (
     <div className="flex min-w-36 items-center gap-2" title={`${done} dari ${total} soal`}>
-      <div aria-hidden className="flex flex-1 gap-0.5">
+      <div aria-hidden className="flex flex-1 flex-wrap gap-1.5 items-center">
         {Array.from({ length: total }, (_, i) => (
-          <span key={i} className={`h-1.5 min-w-0 flex-1 rounded-sm ${i < done ? 'bg-navy' : 'bg-line'}`} />
+          <span
+            key={i}
+            className={`size-2.5 rounded-full transition-colors shrink-0 ${
+              i < done ? 'bg-navy ring-1 ring-navy' : 'bg-line'
+            }`}
+          />
         ))}
       </div>
-      <span className="w-10 text-right text-xs text-muted">
+      <span className="w-10 text-right text-xs font-mono font-medium text-muted shrink-0">
         {Math.min(done, total)}/{total}
       </span>
     </div>

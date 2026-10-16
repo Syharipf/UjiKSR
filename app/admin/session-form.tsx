@@ -25,6 +25,7 @@ export default function SessionForm({
   const [mode, setMode] = useState<TimerMode>(initialMode)
   const initialKind = session?.kind ?? 'pre'
   const [kind, setKind] = useState(initialKind)
+  const [autoSubmit, setAutoSubmit] = useState((session?.max_violations ?? 3) < 999)
   const pairs = preSessions.filter((p) => p.id !== session?.id)
   return (
     <form
@@ -102,25 +103,36 @@ export default function SessionForm({
           <span className="text-xs font-normal text-muted">Peserta melihat kenaikan nilainya dibanding pre-test ini, dicocokkan lewat NIM.</span>
         </label>
       )}
-      {kind === 'post' && (
-        <label className="grid gap-1.5 sm:col-span-2">
-          Link Feedback (Google Form / Kuisioner)
+      <div className="grid gap-2 sm:col-span-2">
+        <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold">
           <input
-            type="url"
-            name="feedback_url"
-            defaultValue={session?.feedback_url ?? ''}
-            placeholder="https://forms.gle/... atau https://docs.google.com/forms/..."
-            className={input}
+            type="checkbox"
+            checked={autoSubmit}
+            onChange={(e) => setAutoSubmit(e.target.checked)}
+            className="size-4 rounded accent-primary"
           />
-          <span className="text-xs font-normal text-muted">
-            Opsional. Ditampilkan ke peserta setelah selesai post-test dan tersedia tayangan QR layar proyektor untuk panitia.
-          </span>
+          <span>Kumpulkan otomatis jika melebihi batas pelanggaran</span>
         </label>
-      )}
-      <label className="grid gap-1.5">
-        Batas pelanggaran (auto-submit)
-        <input type="number" name="max_violations" min={1} max={20} required defaultValue={session?.max_violations ?? 3} className={input} />
-      </label>
+        {autoSubmit ? (
+          <label className="grid gap-1.5 sm:max-w-xs">
+            <span className="text-xs text-muted">Batas pelanggaran (auto-submit)</span>
+            <input
+              type="number"
+              name="max_violations"
+              min={1}
+              max={20}
+              required
+              defaultValue={session?.max_violations && session.max_violations < 999 ? session.max_violations : 3}
+              className={input}
+            />
+          </label>
+        ) : (
+          <>
+            <input type="hidden" name="max_violations" value="999" />
+            <p className="text-xs text-muted">Hanya menampilkan peringatan dan mengunci layar sementara saat pelanggaran terjadi, tanpa pernah mengumpulkan jawaban secara otomatis.</p>
+          </>
+        )}
+      </div>
       <div className="flex items-end">
         <SubmitButton className="btn btn-primary w-full">{submitLabel}</SubmitButton>
       </div>

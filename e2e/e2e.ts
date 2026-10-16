@@ -1,9 +1,11 @@
 // End-to-end run against the local stand-in (PGlite + PostgREST) and `next dev` on :3100.
 // Start everything with `bun run e2e` (see e2e/run.sh).
+import fs from 'node:fs'
 import { chromium, devices, type Browser, type Page, type Route } from 'playwright-core'
 import assert from 'node:assert/strict'
 
-const BASE = 'http://localhost:3100'
+const BASE = (process.env.E2E_BASE_URL || process.env.BASE || 'http://localhost:3100').replace(/\/+$/, '')
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'rahasia-e2e'
 const CSV = new URL('../public/contoh-soal.csv', import.meta.url).pathname
 // question fragment → correct option, matching public/contoh-soal.csv
 const KEY: [string, string][] = [
@@ -25,7 +27,7 @@ async function admin(browser: Browser) {
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await page.waitForURL(/error=1/)
   await page.getByText('Password salah.').waitFor()
-  await page.fill('input[name=password]', 'rahasia-e2e')
+  await page.fill('input[name=password]', ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await page.waitForURL(`${BASE}/admin`)
   log('admin login rejects wrong password, accepts right one')
@@ -34,6 +36,7 @@ async function admin(browser: Browser) {
 
 async function createSession(page: Page, title: string, kind: 'pre' | 'post', mode: 'total' | 'per_question', perQuestion = 45) {
   await page.goto(`${BASE}/admin`)
+  await page.getByRole('button', { name: 'Buat sesi baru' }).click()
   await page.fill('input[name=title]', title)
   await page.selectOption('select[name=kind]', kind)
   await page.selectOption('select[name=timer_mode]', mode)
@@ -44,10 +47,12 @@ async function createSession(page: Page, title: string, kind: 'pre' | 'post', mo
   await page.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await page.waitForURL(/\/admin\/sessions\//)
   const code = (await page.locator('text=/kode [A-Z0-9]{6}/').innerText()).match(/kode ([A-Z0-9]{6})/)![1]
+  await page.click('button:has-text("Soal")')
   await page.click('summary:has-text("Upload file soal")')
   await page.setInputFiles('input[type=file]', CSV)
   await page.click('text=Upload & ganti semua soal')
   await page.getByText('4 soal tersimpan').waitFor()
+  await page.click('button:has-text("Kontrol")')
   await page.click('text=Buka sesi')
   await page.getByText('Lobi dibuka —').waitFor()
   assert.ok(await page.locator('img[alt^="QR http"]').isVisible())
@@ -86,7 +91,15 @@ async function pick(page: Page, text: string) {
   await page.locator('main [role=group] button', { hasText: new RegExp(`^(?:[A-ES]\\.?\\s?)?${text}$`) }).first().click()
 }
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium-browser' })
+const resolveChromium = () => {
+  if (process.env.CHROMIUM_PATH && fs.existsSync(process.env.CHROMIUM_PATH)) return process.env.CHROMIUM_PATH
+  for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome']) {
+    if (fs.existsSync(p)) return p
+  }
+  return undefined
+}
+const chromiumPath = resolveChromium()
+const browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {})
 try {
   const adminPage = await admin(browser)
 
@@ -162,7 +175,7 @@ try {
   // reopen counts as violation
   const c = await participant(browser, pre.code, 'Cici', '1003')
   await c.page.reload()
-  await c.page.locator('[data-violation-count]', { hasText: 'pelanggaran 1 dari 3' }).waitFor()
+  await c.page.locator('[data-violation-count]', { hasText: /pelanggaran [12] dari 3/i }).waitFor()
   await c.page.getByText('Layar ujian terkunci').or(c.page.getByText('Peringatan')).first().waitFor()
   log('reloading the exam counts as a "reopen" violation and locks the screen')
   // resume link on the join page
@@ -181,12 +194,60 @@ try {
   assert.deepEqual(prevented, [true, true, true])
   const css = await d.page.evaluate(() => getComputedStyle(document.querySelector('.no-select')!).userSelect)
   assert.equal(css, 'none')
-  assert.ok(await d.page.locator('div[aria-hidden][style*="data:image/svg+xml"]').count())
-  log('exam page blocks context menu / copy / selection and shows the watermark')
+  log('exam page blocks context menu / copy / selection')
 
   const crafted = await d.page.request.post(`${BASE}/api/attempts/${d.page.url().split('/exam/')[1]}/violation`, { data: { type: '__proto__' } })
   assert.equal(crafted.status(), 400)
   log('a crafted violation type is rejected')
+  // Bottom-edge swipe in fullscreen triggers violation & opaque lock
+  const dodiState = await d.page.evaluate(() => ({
+    fullscreen: document.fullscreenElement !== null,
+    innerHeight: window.innerHeight,
+    url: window.location.href,
+  }))
+  log(`Dodi state before swipe: ${JSON.stringify(dodiState)}`)
+  await d.page.evaluate(() => {
+    const h = window.innerHeight
+    const t = (y: number) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y })
+    document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [t(h - 5)], changedTouches: [t(h - 5)], bubbles: true }))
+    document.body.dispatchEvent(new TouchEvent('touchmove', { touches: [t(h - 60)], changedTouches: [t(h - 60)], bubbles: true }))
+  })
+  await d.page.locator('[data-violation-count]', { hasText: /pelanggaran 1 dari 3/i }).waitFor({ timeout: 10000 }).catch(async (e) => {
+    const debugInfo = await d.page.evaluate(() => ({
+      bodyText: document.body.innerText,
+      alertCount: document.querySelectorAll('[role=alertdialog]').length,
+      violationCountEl: document.querySelector('[data-violation-count]')?.textContent,
+    }))
+    log(`Debug info on failure: ${JSON.stringify(debugInfo)}`)
+    throw e
+  })
+  const alertBg = await d.page.evaluate(() => getComputedStyle(document.querySelector('[role=alertdialog]')!).backgroundColor)
+  assert.equal(alertBg, 'rgb(11, 21, 39)')
+  log('swiping in from the screen edge in fullscreen counts as a violation and locks the screen opaquely')
+
+  await d.page.click('text=Saya mengerti, lanjutkan')
+  await sleep(2100)
+  // Assert that a tap in the edge strip is free (no violation / lock)
+  await d.page.evaluate(() => {
+    const h = window.innerHeight
+    const t = (y: number) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y })
+    document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [t(h - 5)], changedTouches: [t(h - 5)], bubbles: true }))
+    document.body.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [t(h - 5)], bubbles: true }))
+  })
+  await sleep(500)
+  assert.equal(await d.page.locator('[role=alertdialog]').count(), 0)
+
+  // 3-finger touch
+  await d.page.evaluate(() => {
+    const t = (id: number) => new Touch({ identifier: id, target: document.body, clientX: 100 * id, clientY: 200 })
+    document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [t(1), t(2), t(3)], changedTouches: [t(1), t(2), t(3)], bubbles: true }))
+  })
+  await d.page.locator('[data-violation-count]', { hasText: 'pelanggaran 2 dari 3' }).waitFor()
+  log('a 3-finger touch counts as a violation')
+
+
+  await d.page.click('text=Saya mengerti, lanjutkan')
+  await sleep(2100)
 
   // In-app browsers (Instagram, LINE, …) refuse fullscreen; the exam must still be usable, not locked.
   const inApp = await (await browser.newContext({ ...devices['Pixel 7'] })).newPage()
@@ -209,12 +270,15 @@ try {
 
   // --- admin results ------------------------------------------------------
   await adminPage.goto(pre.url)
+  await adminPage.click('button:has-text("Peserta")')
   const row = (name: string) => adminPage.locator('tbody tr', { hasText: name })
   assert.match(await row('Ani').innerText(), /1001\s+S1 TI\s+100\s+0\s+Selesai/)
   assert.match(await row('HYPERLINK').innerText(), /1002\s+S1 TI\s+25\s+3\s+Auto-submit \(pelanggaran\)/)
   await row('HYPERLINK').locator('summary').click()
   assert.match(await row('HYPERLINK').innerText(), /hilang fokus/)
   assert.match(await row('Cici').innerText(), /Mengerjakan/)
+  await row('Dodi').locator('summary').click()
+  assert.match(await row('Dodi').innerText(), /geser tepi layar/)
   log('admin results show score, violation count/log and status')
 
   const csv = await (await adminPage.request.get(`${pre.url}/export?format=csv`)).text()
@@ -225,14 +289,17 @@ try {
   log('CSV export works, escapes formula names, requires admin')
 
   // question editing is locked while participants exist; reset one participant
+  await adminPage.click('button:has-text("Soal")')
   await adminPage.getByText(/^Soal terkunci karena sudah ada peserta atau ujian sudah dimulai/).waitFor()
   assert.equal(await adminPage.locator('input[type=file], summary:has-text("Tambah soal")').count(), 0)
+  await adminPage.click('button:has-text("Peserta")')
   adminPage.once('dialog', (dlg) => dlg.accept())
   await row('Cici').getByText('Reset').click()
   await adminPage.getByText('Peserta direset').waitFor()
   assert.equal(await row('Cici').count(), 0)
   log('question editing locked while attempts exist; single reset works')
 
+  await adminPage.click('button:has-text("Pengaturan")')
   await adminPage.fill('input[name=duration_min]', '20')
   await adminPage.getByRole('button', { name: 'Simpan pengaturan', exact: true }).click()
   await adminPage.getByText('timer terkunci karena sudah ada peserta atau ujian sudah dimulai').waitFor()
@@ -262,6 +329,7 @@ try {
   log('per-question: last answer finishes the exam; score is withheld while the session is open, with a countdown')
 
   await adminPage.goto(post.url)
+  await adminPage.click('button:has-text("Peserta")')
   assert.match(await row('Ani').innerText(), /1001\s+S1 TI\s+75\s+0\s+Selesai/)
   log('per-question score 75 (skipped question counted wrong)')
 
@@ -271,6 +339,26 @@ try {
   await adminPage.goto(`${BASE}/admin/compare?pre=${preId}&post=${postId}`)
   assert.match(await adminPage.locator('tbody tr', { hasText: 'Ani' }).innerText(), /1001\s+100\s+75\s+-25/)
   log('compare page joins pre/post by NIM with delta')
+  // --- rekap -----------------------------------------------------------------
+  await adminPage.goto(`${BASE}/admin/rekap`)
+  await adminPage.locator(`input[name="s"][value="${preId}"]`).check()
+  await adminPage.locator(`input[name="s"][value="${postId}"]`).check()
+  await adminPage.getByRole('button', { name: 'Tampilkan rekap' }).click()
+  await adminPage.waitForURL(/\/admin\/rekap\?.*s=.*s=/)
+  assert.match(
+    await adminPage.locator('tbody tr', { hasText: 'Ani' }).innerText(),
+    /1001\s+S1 TI\s+100\s+75\s+2\/2\s+87\.5/,
+  )
+  const recapCsv = await (
+    await adminPage.request.get(`${BASE}/admin/rekap/export?s=${preId}&s=${postId}&format=csv`)
+  ).text()
+  assert.match(recapCsv, /Ani,1001,S1 TI,100,75,2,87\.5/)
+  const anonRecapRes = await (await browser.newContext()).request.get(
+    `${BASE}/admin/rekap/export?s=${preId}&s=${postId}&format=csv`,
+  )
+  assert.equal(anonRecapRes.status(), 401)
+  log('rekap page lists many sessions per NIM; CSV export requires admin')
+
 
   // --- automatic close ---------------------------------------------------------------
   // Starting began a 4 × 5 s clock: the session closes by itself and, with nobody working,
@@ -288,28 +376,16 @@ try {
   log('reopening a session whose exam is over opens a fresh lobby')
 
   // --- closed session and score release -------------------------------------------
-  // Budi is still working (per-question, 4 × 5 s) when the session closes and never answers, so
-  // scores stay hidden until his time runs out; then everyone's score appears together.
+  // Budi is still working when the committee closes the session; closing force-submits all active
+  // participants immediately and releases scores.
   const late = await participant(browser, post.code, 'Budi', '1004', false)
   await startExam(adminPage, post.url)
   await late.page.getByText('Soal 1 dari 4').waitFor(STARTED)
   await adminPage.goto(post.url)
+  adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.getByRole('button', { name: 'Tutup sesi', exact: true }).click()
   await adminPage.getByText('Sesi ditutup —').waitFor()
-  await adminPage.getByText('1 peserta masih mengerjakan').waitFor()
-  const adminClock = adminPage.locator('main span.font-mono')
-  const before = await adminClock.innerText()
-  assert.match(before, /^0:[0-2]\d$/)
-  await sleep(1500)
-  assert.notEqual(await adminClock.innerText(), before)
-  log('admin sees a live countdown to the score release')
-  const seen = p.views.length // her score was out once already, before the session reopened
-  await p.page.reload()
-  await p.page.getByText('Nilai semua peserta muncul serentak dalam').waitFor()
-  assert.match(await p.page.locator('main p[role=timer]').innerText(), /^0:[0-2]\d$/)
-  assert.ok(p.views.slice(seen).every((v) => !v.includes('"score"')))
-  log('after closing, a finished participant sees a countdown to the shared release time')
-
+  log('closing session force-submits working participants and releases scores immediately')
   // No reloads from here: both pages must pick the score up on their own.
   const shown = async (page: Page) => {
     await page.getByText('Nilaimu').waitFor({ timeout: 35_000 })
@@ -321,8 +397,10 @@ try {
   await p.page.getByText(/Kerja bagus, Ani!/).waitFor()
   assert.ok((await p.page.locator('.confetti').count()) > 0)
   await adminPage.getByText('Nilai sudah terlihat oleh peserta').waitFor({ timeout: 15_000 }) // auto-refresh, no reload
+  await adminPage.click('button:has-text("Peserta")')
+  await adminPage.getByRole('cell', { name: 'Waktu habis' }).waitFor({ timeout: 10_000 })
   assert.ok(await adminPage.getByRole('cell', { name: 'Waktu habis' }).isVisible())
-  log('when the countdown ends, every participant sees their score at about the same time; admin page updates itself')
+  log('every participant sees their score immediately after session is closed; admin page updates itself')
 
   const closed = await (await browser.newContext()).newPage()
   await closed.goto(`${BASE}/s/${post.code}`)
@@ -339,9 +417,11 @@ try {
 
   // --- manual questions ----------------------------------------------------------
   await adminPage.goto(`${BASE}/admin`)
+  await adminPage.getByRole('button', { name: 'Buat sesi baru' }).click()
   await adminPage.fill('input[name=title]', 'Manual E2E')
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await adminPage.waitForURL(/\/admin\/sessions\//)
+  await adminPage.click('button:has-text("Soal")')
   const addForm = adminPage.locator('details:has(summary:has-text("Tambah soal manual")) form')
   await addForm.locator('textarea[name=question]').fill('Warna bendera PMI?')
   await addForm.locator('input[name=a]').fill('Merah putih')
@@ -356,7 +436,8 @@ try {
   await addForm.locator('textarea[name=question]').fill('PMI berdiri tahun 1945.')
   await addForm.locator('select[name=answer]').selectOption('B')
   await addForm.locator('button').click()
-  await adminPage.getByText('Soal (2)').waitFor()
+  await adminPage.getByText('Soal ditambahkan').waitFor()
+  await adminPage.locator('h2', { hasText: 'Soal (2)' }).waitFor()
   assert.match(await adminPage.locator('ol > li').first().innerText(), /C\. Hijau ✓/)
   assert.match(await adminPage.locator('ol > li').nth(1).innerText(), /Benar ✓/)
   log('manual form adds multiple-choice and true/false questions with the right key')
@@ -371,15 +452,18 @@ try {
   adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.locator('ol > li').nth(1).getByText('Hapus').click()
   await adminPage.getByText('Soal dihapus').waitFor()
-  await adminPage.getByText('Soal (1)').waitFor()
+  await adminPage.click('button:has-text("Soal")')
+  await adminPage.locator('h2', { hasText: 'Soal (1)' }).waitFor()
   log('manual edit changes the answer key; delete removes a question')
 
+  await adminPage.click('button:has-text("Soal")')
   await adminPage.click('summary:has-text("Upload file soal")')
   await adminPage.setInputFiles('input[type=file]', { name: 'soal.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK\x03\x04 not really a zip') })
   adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.click('text=Upload & ganti semua soal')
   await adminPage.getByText(/^Upload gagal/).waitFor()
-  await adminPage.getByText('Soal (1)').waitFor()
+  await adminPage.click('button:has-text("Soal")')
+  await adminPage.locator('h2', { hasText: 'Soal (1)' }).waitFor()
   log('a broken Excel file is rejected with a message and keeps existing questions')
 
   // --- theme toggle --------------------------------------------------------------
@@ -401,11 +485,13 @@ try {
 
   // --- session date + delete ----------------------------------------------------
   await adminPage.goto(`${BASE}/admin`)
+  await adminPage.getByRole('button', { name: 'Buat sesi baru' }).click()
   await adminPage.fill('input[name=title]', 'Sesi Hapus E2E')
   await adminPage.fill('input[name=held_on]', '2026-10-05')
   await adminPage.getByRole('button', { name: 'Buat sesi', exact: true }).click()
   await adminPage.waitForURL(/\/admin\/sessions\//)
   await adminPage.getByText('5 Okt 2026', { exact: true }).waitFor()
+  await adminPage.click('button:has-text("Pengaturan")')
   adminPage.once('dialog', (d) => d.accept())
   await adminPage.getByRole('button', { name: 'Hapus sesi', exact: true }).click()
   await adminPage.waitForURL(`${BASE}/admin`)

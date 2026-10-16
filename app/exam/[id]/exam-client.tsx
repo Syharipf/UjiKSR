@@ -12,7 +12,8 @@ import { clock, GRACE_MS, LOBBY_POLL_MS, type ExamView, type PublicQuestion } fr
 import { enterFullscreen, exitFullscreen, isFullscreen, subscribeFullscreen } from '@/lib/fullscreen'
 import Confetti from './confetti'
 import { useAntiCheat } from './use-anti-cheat'
-import Watermark from './watermark'
+import ParticipantFeedbackForm from './feedback-form'
+import { playFinishSound, triggerViolationVibration } from './sound'
 
 type ApiError = Error & { status?: number }
 
@@ -74,9 +75,22 @@ function useStartChecks(view: ExamView | null, offset: number, refresh: () => Pr
   const [checks, setChecks] = useState(0)
   const waiting = view?.status === 'waiting'
   const startsAt = view?.starts_at ?? null
+
   useEffect(() => {
     if (!waiting) return
-    const delay = startsAt === null ? LOBBY_POLL_MS + Math.random() * 1000 : Math.max(0, startsAt - (Date.now() + offset))
+    // If startsAt has arrived or passed, poll aggressively (every 1.5s) until questions load.
+    // If startsAt is still in future, wait until that exact instant.
+    // If startsAt is null (session not started yet), poll every ~2s.
+    const nowServer = Date.now() + offset
+    let delay: number
+    if (startsAt === null) {
+      delay = LOBBY_POLL_MS + Math.random() * 1000
+    } else if (nowServer >= startsAt) {
+      delay = 1500
+    } else {
+      delay = Math.max(0, startsAt - nowServer)
+    }
+
     const t = setTimeout(() => refresh().finally(() => setChecks((n) => n + 1)), delay)
     return () => clearTimeout(t)
   }, [waiting, startsAt, offset, refresh, checks])
@@ -106,11 +120,18 @@ export default function ExamClient({ id }: { id: string }) {
   const onError = useCallback((e: ApiError) => {
     if (e.status === 404) {
       forget(id)
+      exitFullscreen()
       setFatal(e)
     } else setNotice(e.message)
   }, [id])
 
-  const refresh = useCallback(() => call(base).then(apply, onError), [base, apply, onError])
+  const refresh = useCallback(
+    () =>
+      call(base).then(apply, (e: ApiError) => {
+        onError(e)
+      }),
+    [base, apply, onError],
+  )
 
   const lastViolationRef = useRef(0)
   const reportViolation = useCallback(
@@ -118,6 +139,7 @@ export default function ExamClient({ id }: { id: string }) {
       const now = Date.now()
       if (now - lastViolationRef.current < 2000) return
       lastViolationRef.current = now
+      triggerViolationVibration()
       setWarning('Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten.')
       call(`${base}/violation`, { type }).then(
         (v) => {
@@ -125,8 +147,10 @@ export default function ExamClient({ id }: { id: string }) {
           if (v.status === 'active') {
             setWarning((prev) =>
               prev
-                ? `Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. ` +
-                  `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
+                ? v.max_violations < 999
+                  ? `Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. ` +
+                    `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
+                  : 'Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. Pelanggaran dicatat oleh sistem.'
                 : '',
             )
           } else if (v.status === 'submitted') {
@@ -169,14 +193,16 @@ export default function ExamClient({ id }: { id: string }) {
 
   const deadline = view ? (view.question_deadline_at ?? view.deadline_at) : 0
 
-  // When the timer runs out, let the server (which allows GRACE_MS) skip the question or submit.
-  // Re-armed by every new view, so a check that comes back still active tries again.
+  // When active, poll every 2.5s so when admin does "Paksa kumpul" (or closes session),
+  // the participant's screen transitions to submitted immediately in real-time.
+  // Also wakes up immediately when the deadline expires.
   useEffect(() => {
     if (!active) return
-    const t = setTimeout(refresh, Math.max(0, deadline - (Date.now() + offset)) + GRACE_MS + 500)
+    const msUntilDeadline = Math.max(0, deadline - (Date.now() + offset)) + GRACE_MS + 500
+    const delay = Math.min(2500, msUntilDeadline)
+    const t = setTimeout(refresh, delay)
     return () => clearTimeout(t)
   }, [active, deadline, offset, view, refresh])
-
   useEffect(() => {
     if (view?.status !== 'submitted') return
     exitFullscreen()
@@ -186,10 +212,19 @@ export default function ExamClient({ id }: { id: string }) {
   useResultChecks(view, offset, refresh)
   useStartChecks(view, offset, refresh)
 
-  if (fatal) return <Notice title="Tidak bisa membuka ujian" body={fatal.message} />
+  if (fatal)
+    return (
+      <Notice title="Ujian Telah Direset" body={fatal.message}>
+        <div className="mt-4 flex flex-col gap-2">
+          <Link href="/" className="btn btn-primary w-full">
+            Kembali ke Halaman Masuk
+          </Link>
+        </div>
+      </Notice>
+    )
   if (!view) return <Notice title="Memuat ujian…" />
-  if (view.status === 'submitted') return <Submitted view={view} offset={offset} />
-  if (view.status === 'waiting') return <Waiting view={view} offset={offset} />
+  if (view.status === 'submitted') return <Submitted id={id} view={view} offset={offset} />
+  if (view.status === 'waiting') return <Waiting view={view} offset={offset} onRefresh={refresh} />
 
   // Answers and submit run one at a time so each response includes every earlier answer,
   // and a quick "Kumpulkan" never overtakes the last pick. Only the final response is applied,
@@ -203,7 +238,9 @@ export default function ExamClient({ id }: { id: string }) {
       (e: ApiError) => {
         pending.current--
         onError(e)
-        refresh()
+        if (e.status !== 404) {
+          refresh()
+        }
       },
     )
     queue.current = run
@@ -241,8 +278,6 @@ export default function ExamClient({ id }: { id: string }) {
 
   return (
     <div className="no-select flex min-h-dvh flex-col">
-      <Watermark text={`${view.name} · ${view.nim}`} />
-
       <header className="sticky top-0 z-30 border-t-[5px] border-t-band bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl flex-col gap-3 px-4 pt-3 pb-3">
           <div className="flex items-center justify-between gap-3">
@@ -250,7 +285,11 @@ export default function ExamClient({ id }: { id: string }) {
               <p className="truncate font-extrabold">{view.title}</p>
               <p className={`flex items-center gap-1.5 text-[0.8rem] ${view.violation_count ? 'font-semibold text-danger' : 'text-muted'}`}>
                 <Megaphone size={14} />
-                Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> dari {view.max_violations}
+                {view.max_violations < 999 ? (
+                  <>Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> dari {view.max_violations}</>
+                ) : (
+                  <>Pelanggaran <b className={view.violation_count ? '' : 'text-fg'}>{view.violation_count}</b> (hanya peringatan)</>
+                )}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -325,7 +364,7 @@ export default function ExamClient({ id }: { id: string }) {
 
       {notice && <p className="bg-warn-soft px-4 py-2 text-center text-sm">{notice}</p>}
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5 pb-5">
+      <main className="exam-content mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pt-5">
         {shown && (
           <section className="flex flex-1 flex-col gap-4">
             <div className="flex items-baseline justify-between gap-3">
@@ -352,7 +391,7 @@ export default function ExamClient({ id }: { id: string }) {
                 disabled={pickedChoice === null || busy}
                 onClick={() => current && pickedChoice !== null && answerCurrent(current.id, pickedChoice)}
                 aria-busy={busy}
-                className="btn btn-primary mt-auto h-14 w-full text-base"
+                className="btn btn-primary mt-auto mb-6 h-14 w-full text-base shadow-sm"
               >
                 <PendingLabel pending={busy}>{view.current_index + 1 === view.total ? 'Jawab & selesai' : 'Jawab & lanjut'}</PendingLabel>
               </button>
@@ -371,7 +410,7 @@ export default function ExamClient({ id }: { id: string }) {
                 </div>
               </div>
             ) : (
-              <div className="mt-auto grid grid-cols-2 gap-2.5">
+              <div className="mt-auto mb-6 grid grid-cols-2 gap-2.5">
                 <button type="button" disabled={index === 0} onClick={() => setCur(index - 1)} className="btn btn-secondary h-14 text-base">
                   <Chevron dir="left" />
                   Sebelumnya
@@ -393,7 +432,7 @@ export default function ExamClient({ id }: { id: string }) {
       </main>
 
       {locked && (
-        <div role="alertdialog" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1527]/97 p-7 text-[#eef2f8]">
+        <div role="alertdialog" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1527] p-7 text-[#eef2f8]">
           <div className="flex w-full max-w-sm flex-col gap-6 text-center">
             <span className="mx-auto flex size-28 items-center justify-center rounded-full bg-[#c8102e] shadow-[0_0_0_12px_rgb(200_16_46/0.22),0_0_0_26px_rgb(200_16_46/0.1)]">
               <Megaphone size={56} />
@@ -401,7 +440,11 @@ export default function ExamClient({ id }: { id: string }) {
             <div className="space-y-3">
               {warning && (
                 <p data-violation-count className="font-bold text-[#ff7482]">
-                  {view.violation_count ? `Peringatan: pelanggaran ${view.violation_count} dari ${view.max_violations}` : 'Peringatan'}
+                  {view.violation_count
+                    ? view.max_violations < 999
+                      ? `Peringatan: pelanggaran ${view.violation_count} dari ${view.max_violations}`
+                      : `Peringatan: pelanggaran ke-${view.violation_count}`
+                    : 'Peringatan'}
                 </p>
               )}
               <h2 id="lock-title" className="display text-[1.85rem] text-balance">
@@ -409,7 +452,7 @@ export default function ExamClient({ id }: { id: string }) {
               </h2>
               <p className="text-[#c9d3e3]">{warning || 'Ketuk tombol di bawah untuk kembali ke layar penuh dan melanjutkan ujian.'}</p>
             </div>
-            {view.violation_count > 0 && (
+            {view.violation_count > 0 && view.max_violations < 999 && (
               <div aria-hidden className="flex justify-center gap-2">
                 {Array.from({ length: view.max_violations }, (_, i) => (
                   <span key={i} className={`h-2 w-12 rounded ${i < view.violation_count ? 'bg-[#ff5a6a]' : 'bg-[#2a3d63]'}`} />
@@ -417,8 +460,8 @@ export default function ExamClient({ id }: { id: string }) {
               </div>
             )}
             <button
-              onClick={() => {
-                enterFullscreen()
+              onClick={async () => {
+                await enterFullscreen()
                 setWarning('')
               }}
               className="btn h-14 w-full bg-white text-base text-[#0f1a2e] hover:bg-[#eef2f8]"
@@ -479,7 +522,8 @@ function ReleaseCountdown({ at, offset }: Readonly<{ at: number; offset: number 
 }
 
 // Lobby: the participant's card, so they can check their details while waiting for the start.
-function Waiting({ view, offset }: Readonly<{ view: ExamView; offset: number }>) {
+function Waiting({ view, offset, onRefresh }: Readonly<{ view: ExamView; offset: number; onRefresh?: () => void }>) {
+  const [refreshing, setRefreshing] = useState(false)
   const left = Math.max(0, (view.starts_at ?? 0) - (useNow() + offset))
   return (
     <div className="flex min-h-dvh flex-col">
@@ -522,13 +566,39 @@ function Waiting({ view, offset }: Readonly<{ view: ExamView; offset: number }>)
               Menunggu panitia memulai ujian
             </p>
             <p className="max-w-xs text-center text-secondary">Soal muncul otomatis di sini. Biarkan halaman ini terbuka dan layar tetap menyala.</p>
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setRefreshing(true)
+                  try {
+                    await onRefresh()
+                  } finally {
+                    setRefreshing(false)
+                  }
+                }}
+                disabled={refreshing}
+                className="text-xs text-primary underline hover:text-fg disabled:opacity-50"
+              >
+                {refreshing ? 'Memeriksa status...' : 'Pengawas sudah mulai? Periksa sekarang'}
+              </button>
+            )}
           </>
         ) : (
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <p className="text-secondary">Ujian dimulai dalam</p>
             <p role="timer" className="display text-6xl tabular-nums text-primary">
               {clock(left)}
             </p>
+            {left <= 0 && onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="btn btn-primary mt-2 text-sm"
+              >
+                Masuk ujian sekarang
+              </button>
+            )}
           </div>
         )}
 
@@ -551,54 +621,80 @@ const duration = (ms: number) => {
   const s = Math.round(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
+// Post-test feedback sits below the notice/score; a floating pill points to it until it is on screen or sent.
+function FeedbackSection({ attemptId, sent, onSent }: Readonly<{ attemptId: string; sent: boolean; onSent: () => void }>) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [inView, setInView] = useState(false)
 
-function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }>) {
+  useEffect(() => {
+    if (sent || !ref.current) return
+    const observer = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '0px 0px -20% 0px' })
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [sent])
+
+  return (
+    <>
+      <div ref={ref} id="feedback" className="scroll-mt-4">
+        <ParticipantFeedbackForm attemptId={attemptId} initialSubmitted={sent} onSuccess={onSent} />
+      </div>
+      {!sent && !inView && (
+        <button
+          type="button"
+          onClick={() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="btn btn-primary fixed bottom-5 left-1/2 z-30 -translate-x-1/2 rounded-full px-5 shadow-lg motion-safe:animate-bounce"
+        >
+          Isi feedback di bawah
+          <Chevron dir="down" />
+        </button>
+      )}
+    </>
+  )
+}
+
+function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; offset: number }>) {
   const celebrate = view.submit_reason !== 'violation'
   const title = celebrate ? 'Selamat, kamu sudah selesai!' : 'Ujian dikumpulkan otomatis'
+  const [feedbackSent, setFeedbackSent] = useState(view.feedback_sent ?? false)
+
+  useEffect(() => {
+    if (celebrate) {
+      playFinishSound()
+    }
+  }, [celebrate])
+
+  // Waiting for score release:
   if (view.score === undefined && view.results_at === null) {
     return (
-      <Notice
-        title={title}
-        body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
-      >
-        {celebrate && <Confetti />}
-        {view.feedback_url && (
-          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left space-y-2">
-            <p className="text-sm font-semibold text-fg">Form Feedback / Evaluasi</p>
-            <p className="text-xs text-muted">Sembari menunggu nilai keluar, silakan isi kuisioner feedback berikut:</p>
-            <a
-              href={view.feedback_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary inline-flex h-10 w-full items-center justify-center text-sm"
-            >
-              Isi Form Feedback &rarr;
-            </a>
-          </div>
+      <div className="flex min-h-dvh flex-col">
+        <Notice
+          fill={view.kind !== 'post'}
+          title={title}
+          body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
+        >
+          {celebrate && <Confetti />}
+        </Notice>
+        {view.kind === 'post' && (
+          <main className="mx-auto w-full max-w-md px-4.5 pb-24">
+            <FeedbackSection attemptId={id} sent={feedbackSent} onSent={() => setFeedbackSent(true)} />
+          </main>
         )}
-      </Notice>
+      </div>
     )
   }
   if (view.score === undefined) {
     return (
-      <Notice title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
-        {celebrate && <Confetti />}
-        <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
-        {view.feedback_url && (
-          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left space-y-2">
-            <p className="text-sm font-semibold text-fg">Form Feedback / Evaluasi</p>
-            <p className="text-xs text-muted">Sembari menunggu nilai serentak keluar, silakan isi form feedback berikut:</p>
-            <a
-              href={view.feedback_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary inline-flex h-10 w-full items-center justify-center text-sm"
-            >
-              Isi Form Feedback &rarr;
-            </a>
-          </div>
+      <div className="flex min-h-dvh flex-col">
+        <Notice fill={view.kind !== 'post'} title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
+          {celebrate && <Confetti />}
+          <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
+        </Notice>
+        {view.kind === 'post' && (
+          <main className="mx-auto w-full max-w-md px-4.5 pb-24">
+            <FeedbackSection attemptId={id} sent={feedbackSent} onSent={() => setFeedbackSent(true)} />
+          </main>
         )}
-      </Notice>
+      </div>
     )
   }
   const firstName = view.name.trim().split(/\s+/)[0]
@@ -629,7 +725,7 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3 px-4.5 pt-5 pb-6">
+      <main className={`mx-auto flex w-full max-w-md flex-1 flex-col gap-3 px-4.5 pt-5 ${view.kind === 'post' ? 'pb-24' : 'pb-6'}`}>
         {view.kind === 'pre' ? (
           <section aria-labelledby="awal-title" className="card space-y-3 p-4">
             <h2 id="awal-title" className="display text-[0.95rem]">
@@ -674,21 +770,8 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
           <Fact label="Waktu dipakai">{view.time_used_ms !== undefined ? duration(view.time_used_ms) : '–'}</Fact>
           <Fact label="Pelanggaran">{view.violation_count}</Fact>
         </dl>
-        {view.feedback_url && (
-          <section className="card space-y-2.5 border-primary/30 bg-primary/5 p-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-fg">Evaluasi &amp; Feedback Kegiatan</h2>
-              <p className="text-xs text-muted">Mohon bantu isi feedback singkat untuk perbaikan materi dan kegiatan:</p>
-            </div>
-            <a
-              href={view.feedback_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary inline-flex h-11 w-full items-center justify-center text-sm font-semibold"
-            >
-              Buka Form Feedback (Google Form) &rarr;
-            </a>
-          </section>
+        {view.kind === 'post' && (
+          <FeedbackSection attemptId={id} sent={feedbackSent} onSent={() => setFeedbackSent(true)} />
         )}
 
         <div className="flex justify-between gap-3 px-1 pt-1 text-sm text-muted">
@@ -696,9 +779,6 @@ function Submitted({ view, offset }: Readonly<{ view: ExamView; offset: number }
           <span className="shrink-0">NIM {view.nim}</span>
         </div>
 
-        <Link href="/" className="btn btn-secondary mt-auto h-13 w-full text-base">
-          Kembali ke beranda
-        </Link>
       </main>
     </div>
   )

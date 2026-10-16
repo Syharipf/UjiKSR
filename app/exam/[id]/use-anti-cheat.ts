@@ -8,6 +8,11 @@ const DEBOUNCE_MS = 2000
 // Split screen roughly halves the viewport; rotating the phone keeps the area about the same.
 const MIN_AREA_RATIO = 0.6
 const BLOCKED = ['contextmenu', 'copy', 'cut', 'selectstart', 'dragstart'] as const
+// Android's system-bar reveal swipe starts within ~24-28dp of the edge (system_gestures_start_threshold).
+// Keeping it strict ensures revealing the navbar/notification shade (e.g. to open Circle to Search/Lens)
+// is immediately caught, while auto-submit can be turned off in session settings.
+const EDGE_PX = 28
+const EDGE_TRAVEL_PX = 20
 
 // `awake`: hold the screen on (also while waiting in the lobby, so the phone is unlocked when the questions appear).
 export function useAntiCheat(active: boolean, onViolation: (type: string) => void, awake = active) {
@@ -46,6 +51,7 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
     if (!active) return
     let last = 0
     let maxArea = window.innerWidth * window.innerHeight
+
     const report = (type: string) => {
       const now = Date.now()
       if (now - last < DEBOUNCE_MS) return
@@ -53,23 +59,96 @@ export function useAntiCheat(active: boolean, onViolation: (type: string) => voi
       onViolation(type)
     }
 
-    // Android navigation bar / Home button / Circle to Search / Google Lens overlay:
-    // blur and visibilitychange handle app switching and floating assistant overlays.
-    const listeners: [EventTarget, string, () => void][] = [
-      [document, 'visibilitychange', () => document.visibilityState === 'hidden' && report('hidden')],
-      [window, 'blur', () => report('blur')],
-      [document, 'fullscreenchange', () => !isFullscreen() && report('fullscreen_exit')],
+    // Android notification panel / Google Assistant / Circle to Search overlay:
+    // When the top status bar / notification shade is pulled down or an assistant overlay appears,
+    // Android pauses input focus from the web view.
+    // 1. document.hasFocus() immediately returns false even before any blur event is dispatched.
+    // 2. window.blur & window.focusout fire when focus transitions.
+    // 3. fullscreenchange fires if pulling down the notification shade cancels immersion.
+    const checkFocus = () => {
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        report('blur')
+      }
+    }
+    // In fullscreen the system bars are hidden, and a swipe in from the top or bottom edge brings
+    // them back (notification shade; navbar -> hold Home -> Circle to Search/Lens/Gemini).
+    // Firefox/Samsung give the page no blur for those overlays, so the swipe is the only signal.
+    // Only check this in real fullscreen; anywhere else the screen edge is ordinary page content.
+    let edge: { id: number; y: number; dir: 1 | -1 } | null = null
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 3) {
+        edge = null
+        report('multi_touch')
+        return
+      }
+      if (e.touches.length !== 1 || !document.fullscreenElement) {
+        edge = null
+        return
+      }
+      const t = e.touches[0]
+      const h = window.innerHeight
+      if (t.clientY <= EDGE_PX) {
+        edge = { id: t.identifier, y: t.clientY, dir: 1 }
+      } else if (t.clientY >= h - EDGE_PX) {
+        edge = { id: t.identifier, y: t.clientY, dir: -1 }
+      } else {
+        edge = null
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!edge) return
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i]
+        if (t.identifier === edge.id) {
+          if ((t.clientY - edge.y) * edge.dir >= EDGE_TRAVEL_PX) {
+            edge = null
+            report('edge_swipe')
+          }
+          break
+        }
+      }
+    }
+
+    const onTouchCancel = () => {
+      if (edge) {
+        edge = null
+        report('edge_swipe')
+      }
+    }
+    const onTouchEnd = () => {
+      edge = null
+    }
+
+    type ListenerEntry = [EventTarget, string, EventListener, AddEventListenerOptions?]
+
+    const listeners: ListenerEntry[] = [
+      [document, 'visibilitychange', (() => document.visibilityState === 'hidden' && report('hidden')) as EventListener],
+      [window, 'blur', (() => report('blur')) as EventListener],
+      [window, 'focusout', (() => checkFocus()) as EventListener],
+      [document, 'fullscreenchange', (() => !isFullscreen() && report('fullscreen_exit')) as EventListener],
       [
         window,
         'resize',
-        () => {
+        (() => {
           const area = window.innerWidth * window.innerHeight
           if (isFullscreen()) maxArea = Math.max(maxArea, area)
           if (area < maxArea * MIN_AREA_RATIO) report('resize')
-        },
+        }) as EventListener,
       ],
+      [document, 'touchstart', onTouchStart as EventListener, { passive: true }],
+      [document, 'touchmove', onTouchMove as EventListener, { passive: true }],
+      [document, 'touchcancel', onTouchCancel as EventListener, { passive: true }],
+      [document, 'touchend', onTouchEnd as EventListener, { passive: true }],
     ]
-    listeners.forEach(([target, type, fn]) => target.addEventListener(type, fn))
-    return () => listeners.forEach(([target, type, fn]) => target.removeEventListener(type, fn))
+    listeners.forEach(([target, type, fn, opts]) => target.addEventListener(type, fn, opts))
+    // Active polling for document.hasFocus() to catch notification shade dragging & floating overlays
+    const focusInterval = setInterval(checkFocus, 350)
+
+    return () => {
+      clearInterval(focusInterval)
+      listeners.forEach(([target, type, fn, opts]) => target.removeEventListener(type, fn, opts))
+    }
   }, [active, onViolation])
 }

@@ -92,7 +92,11 @@ export default function JoinForm({ session, total }: Props) {
           <dl className="grid grid-cols-3 gap-2">
             <Stat value={timeStat.value} label={timeStat.unit} />
             <Stat value={total} label="soal" />
-            <Stat value={`${session.max_violations}×`} label="batas pelanggaran" accent />
+            <Stat
+              value={session.max_violations >= 999 ? 'Bebas' : `${session.max_violations}×`}
+              label={session.max_violations >= 999 ? 'hanya peringatan' : 'batas pelanggaran'}
+              accent={session.max_violations < 999}
+            />
           </dl>
           <ul className="space-y-3.5 text-[0.95rem] leading-relaxed text-secondary">
             <Rule icon="clock">
@@ -105,8 +109,10 @@ export default function JoinForm({ session, total }: Props) {
               Aktifkan <b className="text-fg">Jangan Ganggu</b> dan tutup aplikasi lain.
             </Rule>
             <Rule icon="megaphone">
-              Pindah aplikasi, membuka notifikasi, split screen, atau keluar layar penuh dihitung pelanggaran. Pelanggaran ke-
-              {session.max_violations} mengumpulkan jawabanmu otomatis.
+              Pindah aplikasi, membuka notifikasi, split screen, atau keluar layar penuh dihitung pelanggaran.
+              {session.max_violations < 999
+                ? ` Pelanggaran ke-${session.max_violations} mengumpulkan jawabanmu otomatis.`
+                : ' Layar akan terkunci sementara dan pelanggaran dicatat dalam log pengawas.'}
             </Rule>
             <Rule icon="globe">
               Buka di <b className="text-fg">Chrome</b> atau <b className="text-fg">Safari</b>, bukan dari dalam Instagram, LINE, atau TikTok.

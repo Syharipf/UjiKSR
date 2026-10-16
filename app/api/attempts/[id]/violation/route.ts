@@ -3,14 +3,13 @@ import { finalize, loadCtx, sync, view } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { ExamError, hasStarted } from '@/lib/exam'
 
-// What use-anti-cheat.ts and the exam page report. Anything else is a crafted request.
-const TYPES = new Set(['hidden', 'blur', 'fullscreen_exit', 'resize', 'reopen'])
+import { VIOLATION_TYPES } from '@/lib/violations'
 
 export async function POST(req: Request, ctx: RouteContext<'/api/attempts/[id]/violation'>) {
   return handle(async () => {
     const now = new Date()
     const type = String((await readJson(req)).type)
-    if (!TYPES.has(type)) throw new ExamError(400, 'Jenis pelanggaran tidak valid')
+    if (!Object.hasOwn(VIOLATION_TYPES, type)) throw new ExamError(400, 'Jenis pelanggaran tidak valid')
     const exam = await loadCtx((await ctx.params).id)
     await sync(exam, now)
     if (exam.attempt.submitted_at || !hasStarted(exam.session, now.getTime())) return view(exam, now) // nothing to leave in the lobby

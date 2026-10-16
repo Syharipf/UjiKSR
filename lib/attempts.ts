@@ -115,7 +115,14 @@ export function resultsStatus(session: Session): Promise<ResultsStatus> {
 export async function view(ctx: Ctx, now: Date) {
   const results = ctx.attempt.submitted_at ? await resultsStatus(ctx.session) : undefined
   const pre = results?.released && ctx.session.kind === 'post' && ctx.session.pre_session_id ? await preScore(ctx.session.pre_session_id, ctx.attempt.nim) : undefined
-  return buildView(ctx.attempt, ctx.session, ctx.questions, now, results, pre)
+  let feedbackSent = false
+  if (ctx.attempt.submitted_at && ctx.session.kind === 'post') {
+    try {
+      const fb = await db().from('feedback').select('id').eq('attempt_id', ctx.attempt.id).maybeSingle()
+      feedbackSent = Boolean(fb.data)
+    } catch {}
+  }
+  return buildView(ctx.attempt, ctx.session, ctx.questions, now, results, pre, feedbackSent)
 }
 
 // A post-test's paired pre-test score for the same NIM (null when there is none). Matched like the

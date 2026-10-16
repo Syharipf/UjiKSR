@@ -22,6 +22,24 @@
 --   alter table exam_sessions add column pre_session_id uuid references exam_sessions (id) on delete set null;
 -- Upgrading a database created before post-test feedback existed? Run just this:
 --   alter table exam_sessions add column feedback_url text;
+-- Upgrading a database created before in-app feedback existed? Run just this:
+--   alter table exam_sessions add column feedback_webhook_url text;
+--   create table if not exists feedback (
+--     id uuid primary key default gen_random_uuid(),
+--     attempt_id uuid not null unique references attempts (id) on delete cascade,
+--     session_id uuid not null references exam_sessions (id) on delete cascade,
+--     materi text not null check (char_length(materi) between 1 and 200),
+--     rating_overall smallint not null check (rating_overall between 1 and 5),
+--     rating_understanding smallint not null check (rating_understanding between 1 and 5),
+--     rating_room smallint check (rating_room between 1 and 5),
+--     note_speaker text check (char_length(note_speaker) <= 2000),
+--     note_material text check (char_length(note_material) <= 2000),
+--     note_practice text check (char_length(note_practice) <= 2000),
+--     note_room text check (char_length(note_room) <= 2000),
+--     note_next text check (char_length(note_next) <= 2000),
+--     created_at timestamptz not null default now()
+--   );
+--   create index if not exists feedback_session_idx on feedback (session_id, created_at desc);
 
 create table exam_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -38,6 +56,7 @@ create table exam_sessions (
   started_at timestamptz, -- set by "Mulai ujian": every attempt's clock starts here (null = lobby)
   pre_session_id uuid references exam_sessions (id) on delete set null, -- post-test: its pre-test, compared by NIM
   feedback_url text, -- post-test optional: Google Form or external evaluation survey
+  feedback_webhook_url text, -- post-test optional: Google Sheets Webhook URL to inject rows directly into Drive spreadsheet
   created_at timestamptz not null default now()
 );
 
@@ -84,6 +103,24 @@ alter table exam_sessions enable row level security;
 alter table questions enable row level security;
 alter table attempts enable row level security;
 alter table violations enable row level security;
+create table feedback (
+  id uuid primary key default gen_random_uuid(),
+  attempt_id uuid not null unique references attempts (id) on delete cascade,
+  session_id uuid not null references exam_sessions (id) on delete cascade,
+  materi text not null check (char_length(materi) between 1 and 200),
+  rating_overall smallint not null check (rating_overall between 1 and 5),
+  rating_understanding smallint not null check (rating_understanding between 1 and 5),
+  rating_room smallint check (rating_room between 1 and 5),
+  note_speaker text check (char_length(note_speaker) <= 2000),
+  note_material text check (char_length(note_material) <= 2000),
+  note_practice text check (char_length(note_practice) <= 2000),
+  note_room text check (char_length(note_room) <= 2000),
+  note_next text check (char_length(note_next) <= 2000),
+  created_at timestamptz not null default now()
+);
+create index feedback_session_idx on feedback (session_id, created_at desc);
+alter table feedback enable row level security;
+
 
 -- Merge one answer atomically. Guarded by current_index so a stale per-question
 -- answer (or a concurrent one) updates nothing and returns no row.
@@ -113,4 +150,4 @@ revoke execute on function add_violation(uuid, text) from public, anon, authenti
 grant execute on function record_answer(uuid, text, int, int, int, timestamptz) to service_role;
 grant execute on function add_violation(uuid, text) to service_role;
 grant usage on schema public to service_role;
-grant select, insert, update, delete on exam_sessions, questions, attempts, violations to service_role;
+grant select, insert, update, delete on exam_sessions, questions, attempts, violations, feedback to service_role;

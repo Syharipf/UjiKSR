@@ -42,6 +42,75 @@ export function compareScores(pre: ScoreRow[], post: ScoreRow[]) {
     avgDelta: average(rows.map((r) => r.delta)),
   }
 }
+export interface RecapAttempt {
+  session_id: string
+  name: string
+  nim: string
+  prodi: string
+  score: number | null
+}
+
+export interface RecapRow {
+  nim: string
+  name: string
+  prodi: string
+  scores: (number | null)[] // one per sessionIds entry; null = did not join, or joined but no score yet
+  attended: number // selected sessions this NIM joined
+  average: number | null // over the non-null scores, 1 decimal
+}
+
+export interface Recap {
+  rows: RecapRow[]
+  sessionAverages: (number | null)[] // per column
+  overall: number | null // over every non-null score in the selected sessions
+}
+
+// Several sessions side by side, one row per participant matched by NIM (case/whitespace-insensitive).
+// sessionIds sets the column order; attempts of other sessions are ignored.
+export function recapScores(sessionIds: string[], attempts: RecapAttempt[]): Recap {
+  const col = new Map(sessionIds.map((id, i) => [id, i]))
+  const kept = attempts
+    .filter((a) => col.has(a.session_id))
+    .sort((a, b) => col.get(a.session_id)! - col.get(b.session_id)!)
+
+  const byNim = new Map<string, RecapRow>()
+  for (const a of kept) {
+    const key = norm(a.nim)
+    let row = byNim.get(key)
+    if (!row) {
+      row = {
+        nim: a.nim.trim(),
+        name: a.name,
+        prodi: a.prodi,
+        scores: sessionIds.map(() => null),
+        attended: 0,
+        average: null,
+      }
+      byNim.set(key, row)
+    }
+    row.name = a.name
+    if (a.prodi.trim()) {
+      row.prodi = a.prodi
+    }
+    const colIdx = col.get(a.session_id)!
+    row.scores[colIdx] = a.score
+    row.attended++
+  }
+
+  const rows = [...byNim.values()]
+    .map((r) => ({ ...r, average: average(r.scores) }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.nim.localeCompare(b.nim))
+
+  const sessionAverages = sessionIds.map((_, i) => average(rows.map((r) => r.scores[i])))
+  const overall = average(kept.map((a) => a.score))
+
+  return {
+    rows,
+    sessionAverages,
+    overall,
+  }
+}
+
 
 export interface SessionStats {
   submittedCount: number

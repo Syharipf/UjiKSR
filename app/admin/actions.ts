@@ -9,9 +9,10 @@ import { parseQuestionsCsv, toQuestion } from '@/lib/csv'
 import { parseQuestionsXlsx } from '@/lib/excel'
 import { finishRound, forceSubmitAll as attemptsForceSubmitAll, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
-import { deadlineFor, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
+import { cleanTopic, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
-const back = (id: string, msg: string) => redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}`)
+const back = (id: string, msg: string, tab?: string) =>
+  redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}${tab ? `&tab=${tab}` : ''}`)
 
 export async function login(formData: FormData) {
   if (!process.env.ADMIN_PASSWORD) {
@@ -59,15 +60,12 @@ function sessionFields(f: FormData) {
   // Post-test only: the pre-test its participants' scores are compared with (by NIM). Checked in pairWith.
   const pre = kind === 'post' ? String(f.get('pre_session_id') ?? '') : ''
   if (pre && !UUID.test(pre)) throw new Error('Pasangan pre-test tidak valid')
-  const rawFeedback = kind === 'post' ? String(f.get('feedback_url') ?? '').trim() : ''
-  if (rawFeedback && !/^https?:\/\//i.test(rawFeedback)) throw new Error('Link feedback harus diawali http:// atau https://')
-  // Sent only for post-tests (a pre-test's stale pair or feedback is cleared).
-  // Omit feedback_url when empty so databases without the new column still create/update sessions.
-  const postFields: { pre_session_id?: string | null; feedback_url?: string | null } =
+  // Sent only for post-tests (a pre-test's stale pair is cleared).
+  const postFields: { pre_session_id?: string | null; feedback_url?: string | null; feedback_webhook_url?: string | null } =
     kind === 'post'
-      ? { pre_session_id: pre || null, ...(rawFeedback ? { feedback_url: rawFeedback } : {}) }
-      : { pre_session_id: null }
-  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 20), ...postFields }
+      ? { pre_session_id: pre || null, feedback_url: null, feedback_webhook_url: null }
+      : { pre_session_id: null, feedback_url: null, feedback_webhook_url: null }
+  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 999), ...postFields }
 }
 
 // The chosen pair must be an existing pre-test (and not the session itself).
@@ -80,13 +78,30 @@ async function checkPair(preId: string | null, selfId?: string) {
 export async function createSession(formData: FormData) {
   await requireAdmin()
   const fields = sessionFields(formData)
+
+  // If post-test has no explicit pre_session_id chosen, try to auto-pair with pre-test having matching title
+  if (fields.kind === 'post' && !fields.pre_session_id) {
+    const topic = cleanTopic(fields.title).toLowerCase()
+    if (topic) {
+      const candidates: Pick<Session, 'id' | 'title' | 'held_on'>[] = must(
+        await db().from('exam_sessions').select('id, title, held_on').eq('kind', 'pre').order('created_at', { ascending: false }),
+      )
+      const matched = candidates.find((c) => cleanTopic(c.title).toLowerCase() === topic)
+      if (matched) {
+        fields.pre_session_id = matched.id
+      }
+    }
+  }
+
   await checkPair(fields.pre_session_id ?? null)
   for (let i = 0; i < 5; i++) {
     const { data, error } = await db().from('exam_sessions').insert({ ...fields, code: newCode() }).select('id').single()
     if (error?.code === '23505') continue // code collision, try another
-    if (error?.code === 'PGRST204' && 'feedback_url' in fields) {
-      const { feedback_url, ...withoutFeedback } = fields
-      const fallback = await db().from('exam_sessions').insert({ ...withoutFeedback, code: newCode() }).select('id').single()
+    if (error?.code === 'PGRST204') {
+      const stripped: Record<string, unknown> = { ...fields }
+      delete stripped.feedback_webhook_url
+      delete stripped.feedback_url
+      const fallback = await db().from('exam_sessions').insert({ ...stripped, code: newCode() }).select('id').single()
       if (fallback.data) redirect(`/admin/sessions/${fallback.data.id}`)
       if (fallback.error?.code === '23505') continue
       if (fallback.error) throw fallback.error
@@ -100,6 +115,21 @@ export async function createSession(formData: FormData) {
 export async function updateSession(id: string, formData: FormData) {
   await requireAdmin()
   const fields = sessionFields(formData)
+
+  // If post-test has no explicit pre_session_id chosen, try to auto-pair with pre-test having matching title
+  if (fields.kind === 'post' && !fields.pre_session_id) {
+    const topic = cleanTopic(fields.title).toLowerCase()
+    if (topic) {
+      const candidates: Pick<Session, 'id' | 'title' | 'held_on'>[] = must(
+        await db().from('exam_sessions').select('id, title, held_on').eq('kind', 'pre').neq('id', id).order('created_at', { ascending: false }),
+      )
+      const matched = candidates.find((c) => cleanTopic(c.title).toLowerCase() === topic)
+      if (matched) {
+        fields.pre_session_id = matched.id
+      }
+    }
+  }
+
   await checkPair(fields.pre_session_id ?? null, id)
   // The shared clock and attempts use the current settings (deadlines, per-question order);
   // changing them underneath would move deadlines or let per-question takers go back.
@@ -109,39 +139,47 @@ export async function updateSession(id: string, formData: FormData) {
   }
   const { error } = await db().from('exam_sessions').update(fields).eq('id', id)
   if (error) {
-    // If the database has not yet been upgraded with feedback_url, retry without it
-    if ((error as { code?: string }).code === 'PGRST204' && 'feedback_url' in fields) {
-      const { feedback_url, ...withoutFeedback } = fields
-      must(await db().from('exam_sessions').update(withoutFeedback).eq('id', id))
+    // If the database has not yet been upgraded with feedback_webhook_url or feedback_url, retry progressively
+    if ((error as { code?: string }).code === 'PGRST204') {
+      const withoutWebhook = { ...fields }
+      delete withoutWebhook.feedback_webhook_url
+      const retry1 = await db().from('exam_sessions').update(withoutWebhook).eq('id', id)
+      if (retry1.error && (retry1.error as { code?: string }).code === 'PGRST204') {
+        delete withoutWebhook.feedback_url
+        must(await db().from('exam_sessions').update(withoutWebhook).eq('id', id))
+      } else if (retry1.error) {
+        throw retry1.error
+      }
     } else {
       throw error
     }
   }
-  back(id, 'Pengaturan tersimpan')
+  back(id, 'Pengaturan tersimpan', 'pengaturan')
 }
 
 type TimerRow = Pick<Session, TimerField | 'is_open' | 'closes_at' | 'started_at'> & { questions: { count: number }[] }
 const timerRow = async (id: string): Promise<TimerRow> =>
   must(await db().from('exam_sessions').select('is_open, closes_at, started_at, timer_mode, duration_sec, per_question_sec, questions(count)').eq('id', id).single())
 
-// Opening a new session (or one whose exam is over) opens the lobby: participants join and wait for
-// "Mulai ujian". Reopening an exam still running lets latecomers in for the time left.
+// Opening a session opens the lobby: participants join and wait for "Mulai ujian".
 export async function setOpen(id: string, open: boolean) {
   await requireAdmin()
-  const fields: Partial<Session> = { is_open: open, closes_at: null }
   if (open) {
     const s = await timerRow(id)
-    const end = s.started_at && deadlineFor(s, s.questions[0]?.count ?? 0, new Date(s.started_at))
-    if (end && end.getTime() > Date.now()) fields.closes_at = end.toISOString()
-    else if (s.started_at) {
-      await finishRound(id) // finish the last round's leftovers before clearing its clock
-      fields.started_at = null
+    if (s.started_at) {
+      await finishRound(id)
     }
+    const fields: Partial<Session> = { is_open: true, started_at: null, closes_at: null }
     const update = db().from('exam_sessions').update(fields).eq('id', id)
     const opened = must(await (s.started_at === null ? update.is('started_at', null) : update.eq('started_at', s.started_at)).select('id'))
     if (!opened.length) return back(id, 'Status sesi berubah — muat ulang halaman lalu coba lagi')
   } else {
-    must(await db().from('exam_sessions').update(fields).eq('id', id))
+    const s = await timerRow(id)
+    if (s.started_at) {
+      await attemptsForceSubmitAll(id)
+    } else {
+      must(await db().from('exam_sessions').update({ is_open: false, closes_at: null }).eq('id', id))
+    }
   }
   back(id, open ? 'Sesi dibuka' : 'Sesi ditutup')
 }
@@ -201,7 +239,7 @@ export async function uploadQuestions(id: string, formData: FormData) {
 
   must(await db().from('questions').delete().eq('session_id', id))
   must(await db().from('questions').insert(questions.map((q) => ({ ...q, session_id: id }))))
-  back(id, `${questions.length} soal tersimpan`)
+  back(id, `${questions.length} soal tersimpan`, 'soal')
 }
 
 // Add (questionId null) or edit one question from the manual form.
@@ -212,31 +250,31 @@ export async function saveQuestion(sessionId: string, questionId: string | null,
     return typeof value === 'string' ? value : ''
   }
   const q = toQuestion({ type: field('type'), text: field('question'), options: ['a', 'b', 'c', 'd', 'e'].map(field), answer: field('answer') })
-  if (typeof q === 'string') return back(sessionId, `Soal belum tersimpan — ${q}`)
-  if (await isLocked(sessionId)) return back(sessionId, LOCKED)
+  if (typeof q === 'string') return back(sessionId, `Soal belum tersimpan — ${q}`, 'soal')
+  if (await isLocked(sessionId)) return back(sessionId, LOCKED, 'soal')
 
   if (questionId) {
     must(await db().from('questions').update(q).eq('id', questionId).eq('session_id', sessionId))
-    return back(sessionId, 'Soal diperbarui')
+    return back(sessionId, 'Soal diperbarui', 'soal')
   }
   const last: { position: number } | null = must(
     await db().from('questions').select('position').eq('session_id', sessionId).order('position', { ascending: false }).limit(1).maybeSingle(),
   )
   must(await db().from('questions').insert({ ...q, session_id: sessionId, position: (last?.position ?? -1) + 1 }))
-  back(sessionId, 'Soal ditambahkan')
+  back(sessionId, 'Soal ditambahkan', 'soal')
 }
 
 export async function deleteQuestion(sessionId: string, questionId: string) {
   await requireAdmin()
-  if (await isLocked(sessionId)) return back(sessionId, LOCKED)
+  if (await isLocked(sessionId)) return back(sessionId, LOCKED, 'soal')
   must(await db().from('questions').delete().eq('id', questionId).eq('session_id', sessionId))
-  back(sessionId, 'Soal dihapus')
+  back(sessionId, 'Soal dihapus', 'soal')
 }
 
 export async function resetAttempt(sessionId: string, attemptId: string) {
   await requireAdmin()
   must(await db().from('attempts').delete().eq('id', attemptId).eq('session_id', sessionId))
-  back(sessionId, 'Peserta direset dan bisa mulai ulang')
+  back(sessionId, 'Peserta direset dan bisa mulai ulang', 'peserta')
 }
 
 export async function resetAllAttempts(sessionId: string) {
