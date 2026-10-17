@@ -65,7 +65,7 @@ function sessionFields(f: FormData) {
     kind === 'post'
       ? { pre_session_id: pre || null, feedback_url: null, feedback_webhook_url: null }
       : { pre_session_id: null, feedback_url: null, feedback_webhook_url: null }
-  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 999), ...postFields }
+  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 999), camera_check: f.get('camera_check') === 'on', ...postFields }
 }
 
 // The chosen pair must be an existing pre-test (and not the session itself).
@@ -342,6 +342,7 @@ export async function duplicateSession(sessionId: string) {
         duration_sec: source.duration_sec,
         per_question_sec: source.per_question_sec,
         max_violations: source.max_violations,
+        camera_check: source.camera_check ?? false,
         // A post-test made from a pre-test is paired with it, so scores can be compared.
         ...(newKind === 'post' ? { pre_session_id: source.id } : {}),
         is_open: false,

@@ -196,7 +196,8 @@ export default function ExamClient({ id }: { id: string }) {
 
   const active = view?.status === 'active'
   useAntiCheat(active, reportViolation, active || view?.status === 'waiting')
-  const cameraOk = useFaceWatch(active || view?.status === 'waiting', active && warning === '' && fullscreen, reportViolation)
+  const camera = view?.camera_check === true
+  const cameraOk = useFaceWatch(camera && (active || view?.status === 'waiting'), active && warning === '' && fullscreen, reportViolation)
   // No camera (denied/unsupported): the exam goes on, the committee just sees a note. Once per page load.
   const notedRef = useRef(false)
   useEffect(() => {

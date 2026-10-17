@@ -20,6 +20,7 @@ export interface Session {
   pre_session_id?: string | null // post-test only: the pre-test it is compared with (by NIM) on the participant's score page
   feedback_url?: string | null // post-test optional: Google Form / feedback questionnaire link
   feedback_webhook_url?: string | null // post-test optional: Google Sheets Webhook URL to inject rows directly into Drive
+  camera_check?: boolean // participants' front camera warns when they look away (absent on databases not yet upgraded = off)
 }
 
 // Open = opened by the committee and the exam not yet over.
@@ -102,6 +103,7 @@ export interface ExamView {
   timer_mode: TimerMode
   per_question_sec: number
   max_violations: number
+  camera_check: boolean
   violation_count: number
   server_now: number
   starts_at: number | null // waiting: when the questions appear (null = the committee hasn't pressed "Mulai ujian" yet)
@@ -244,6 +246,7 @@ export function buildView(
     timer_mode: s.timer_mode,
     per_question_sec: s.per_question_sec,
     max_violations: s.max_violations,
+    camera_check: s.camera_check ?? false,
     violation_count: a.violation_count,
     server_now: now.getTime(),
     starts_at: s.started_at ? Date.parse(s.started_at) : null,

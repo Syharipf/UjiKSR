@@ -1,18 +1,19 @@
-// Head-pose rule for the exam camera, fed by MediaPipe's BlazeFace keypoints
-// (0 right eye, 1 left eye, 2 nose tip, … in normalized image coordinates).
+// Head-pose rule for the exam camera, fed by MediaPipe FaceLandmarker's 478 landmarks
+// (normalized image coordinates). 1 = nose tip, 234 / 454 = the face's outer edges at the cheeks.
 type Point = { x: number; y: number }
 
-// How far the nose sits off the eye midpoint, in eye distances. Facing the phone ≈ 0;
-// it grows with tan(yaw): ~0.23 at 30°, ~0.39 at 45°.
-export const TURN_RATIO = 0.25
+// Where the nose sits between the two face edges: 0.5 facing the phone, toward 0 or 1 as the head turns.
+// Measured on photos: frontal 0.52, a slight three-quarter turn 0.35/0.63, ~35° of yaw −0.03.
+// 0.15 off centre catches a turn toward a book beside the phone; reading the screen stays near 0.5.
+export const TURN_OFFSET = 0.15
 
 export type FaceState = 'ok' | 'turned' | 'missing'
 
-export function faceState(faces: { keypoints: Point[] }[]): FaceState {
-  const kp = faces[0]?.keypoints
-  if (!kp || kp.length < 3) return 'missing'
-  const [r, l, nose] = kp
-  const eyes = Math.abs(l.x - r.x)
-  if (eyes === 0) return 'turned'
-  return Math.abs(nose.x - (l.x + r.x) / 2) / eyes > TURN_RATIO ? 'turned' : 'ok'
+export function faceState(faces: Point[][]): FaceState {
+  const lm = faces[0]
+  if (!lm || lm.length < 455) return 'missing'
+  const left = lm[234].x
+  const width = lm[454].x - left
+  if (width === 0) return 'turned'
+  return Math.abs((lm[1].x - left) / width - 0.5) > TURN_OFFSET ? 'turned' : 'ok'
 }

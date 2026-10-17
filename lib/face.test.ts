@@ -1,12 +1,19 @@
 import { expect, test } from 'bun:test'
 import { faceState } from './face'
 
-const face = (noseX: number) => ({ keypoints: [{ x: 0.4, y: 0.4 }, { x: 0.6, y: 0.4 }, { x: noseX, y: 0.5 }] })
+// A face spanning x 0.3–0.7 with the nose at noseX.
+const face = (noseX: number) => {
+  const lm = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5 }))
+  lm[234] = { x: 0.3, y: 0.5 }
+  lm[454] = { x: 0.7, y: 0.5 }
+  lm[1] = { x: noseX, y: 0.5 }
+  return lm
+}
 
 test('faceState', () => {
   expect(faceState([])).toBe('missing')
   expect(faceState([face(0.5)])).toBe('ok')
-  expect(faceState([face(0.54)])).toBe('ok') // slight tilt, 0.2 eye distances
-  expect(faceState([face(0.56)])).toBe('turned') // 0.3 eye distances to the left eye side
-  expect(faceState([face(0.43)])).toBe('turned') // mirrored
+  expect(faceState([face(0.55)])).toBe('ok') // 0.125 off centre: small head movement
+  expect(faceState([face(0.57)])).toBe('turned') // 0.175 off centre
+  expect(faceState([face(0.43)])).toBe('turned') // other side
 })

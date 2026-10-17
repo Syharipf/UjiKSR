@@ -49,6 +49,8 @@
 --   );
 --   alter table question_images enable row level security;
 --   grant select, insert, update, delete on question_images to service_role;
+-- Upgrading a database created before the camera setting existed? Run just this:
+--   alter table exam_sessions add column camera_check boolean not null default false;
 
 create table exam_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -66,6 +68,7 @@ create table exam_sessions (
   pre_session_id uuid references exam_sessions (id) on delete set null, -- post-test: its pre-test, compared by NIM
   feedback_url text, -- post-test optional: Google Form or external evaluation survey
   feedback_webhook_url text, -- post-test optional: Google Sheets Webhook URL to inject rows directly into Drive spreadsheet
+  camera_check boolean not null default false, -- participants' front camera warns when they look away (use-face-watch.ts)
   created_at timestamptz not null default now()
 );
 

@@ -133,6 +133,15 @@ export default function SessionForm({
           </>
         )}
       </div>
+      <label className="flex items-start gap-2 cursor-pointer text-sm font-semibold sm:col-span-2">
+        <input type="checkbox" name="camera_check" defaultChecked={session?.camera_check ?? false} className="mt-0.5 size-4 rounded accent-primary" />
+        <span>
+          Pantau wajah lewat kamera depan
+          <span className="block text-xs font-normal text-muted">
+            Peringatan saat peserta menoleh atau wajahnya tidak terlihat. Diproses di HP peserta, tidak ada gambar yang dikirim. Peserta yang menolak izin kamera tetap bisa ujian (tercatat).
+          </span>
+        </span>
+      </label>
       <div className="flex items-end">
         <SubmitButton className="btn btn-primary w-full">{submitLabel}</SubmitButton>
       </div>
