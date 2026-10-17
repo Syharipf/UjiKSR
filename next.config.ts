@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    '/admin/rekap/rapor/zip': ['./lib/rapor/**/*'],
+  },
   async headers() {
     return [
       {

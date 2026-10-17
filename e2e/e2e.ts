@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import { chromium, devices, type Browser, type Page, type Route } from 'playwright-core'
 import assert from 'node:assert/strict'
-
+import { unzipSync } from 'fflate'
 const BASE = (process.env.E2E_BASE_URL || process.env.BASE || 'http://localhost:3100').replace(/\/+$/, '')
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'rahasia-e2e'
 const CSV = new URL('../public/contoh-soal.csv', import.meta.url).pathname
@@ -370,6 +370,22 @@ try {
   await rapor.close()
   assert.equal((await (await browser.newContext()).request.get(BASE + raporHref, { maxRedirects: 0 })).status() >= 300, true)
   log('rapor per NIM opens from the recap, prints to PDF, and requires admin')
+  // bulk rapor ZIP
+  const zipRes = await adminPage.request.get(`${BASE}/admin/rekap/rapor/zip?s=${preId}&s=${postId}`)
+  assert.equal(zipRes.status(), 200)
+  assert.equal(zipRes.headers()['content-type'], 'application/zip')
+  const zipBuf = await zipRes.body()
+  const unzipped = unzipSync(new Uint8Array(zipBuf))
+  const entryNames = Object.keys(unzipped)
+  assert.ok(entryNames.includes('Rapor 1001 Ani.pdf'))
+  assert.equal(entryNames.length, 4) // Ani (1001), HYPERLINK (1002), Cici (1003), Dodi (1004)
+  for (const name of entryNames) {
+    const pdfHead = Buffer.from(unzipped[name].subarray(0, 4)).toString('ascii')
+    assert.equal(pdfHead, '%PDF')
+  }
+  const anonZipRes = await (await browser.newContext()).request.get(`${BASE}/admin/rekap/rapor/zip?s=${preId}&s=${postId}`)
+  assert.equal(anonZipRes.status(), 401)
+  log('bulk rapor ZIP has one PDF per NIM and requires admin')
 
 
   // --- automatic close ---------------------------------------------------------------

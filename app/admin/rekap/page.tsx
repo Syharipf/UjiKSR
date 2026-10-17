@@ -74,6 +74,12 @@ export default async function RekapPage(props: PageProps<'/admin/rekap'>) {
               >
                 Export CSV
               </a>
+              <a
+                href={`/admin/rekap/rapor/zip?${exportQs}`}
+                className="btn btn-secondary text-sm"
+              >
+                Unduh semua rapor (ZIP)
+              </a>
             </div>
           </div>
 
