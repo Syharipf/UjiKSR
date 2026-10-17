@@ -251,17 +251,44 @@ export async function saveQuestion(sessionId: string, questionId: string | null,
   }
   const q = toQuestion({ type: field('type'), text: field('question'), options: ['a', 'b', 'c', 'd', 'e'].map(field), answer: field('answer') })
   if (typeof q === 'string') return back(sessionId, `Soal belum tersimpan — ${q}`, 'soal')
+  const file = formData.get('image')
+  const image = file instanceof File && file.size > 0 ? await readImage(file) : null
+  if (typeof image === 'string') return back(sessionId, `Soal belum tersimpan — ${image}`, 'soal')
   if (await isLocked(sessionId)) return back(sessionId, LOCKED, 'soal')
 
-  if (questionId) {
-    must(await db().from('questions').update(q).eq('id', questionId).eq('session_id', sessionId))
-    return back(sessionId, 'Soal diperbarui', 'soal')
+  let id = questionId
+  if (id) {
+    must(await db().from('questions').update(q).eq('id', id).eq('session_id', sessionId))
+  } else {
+    const last: { position: number } | null = must(
+      await db().from('questions').select('position').eq('session_id', sessionId).order('position', { ascending: false }).limit(1).maybeSingle(),
+    )
+    const row: { id: string } = must(await db().from('questions').insert({ ...q, session_id: sessionId, position: (last?.position ?? -1) + 1 }).select('id').single())
+    id = row.id
   }
-  const last: { position: number } | null = must(
-    await db().from('questions').select('position').eq('session_id', sessionId).order('position', { ascending: false }).limit(1).maybeSingle(),
-  )
-  must(await db().from('questions').insert({ ...q, session_id: sessionId, position: (last?.position ?? -1) + 1 }))
-  back(sessionId, 'Soal ditambahkan', 'soal')
+  if (image) {
+    must(await db().from('question_images').upsert({ question_id: id, ...image }))
+    must(await db().from('questions').update({ image_rev: Date.now().toString(36) }).eq('id', id))
+  } else if (formData.get('remove_image')) {
+    must(await db().from('question_images').delete().eq('question_id', id))
+    must(await db().from('questions').update({ image_rev: null }).eq('id', id))
+  }
+  back(sessionId, questionId ? 'Soal diperbarui' : 'Soal ditambahkan', 'soal')
+}
+
+// The browser shrinks pictures before upload (question-form.tsx); this is the server's own check.
+const IMAGE_MAX_BYTES = 700_000
+async function readImage(file: File): Promise<{ mime: string; data: string } | string> {
+  if (file.size > IMAGE_MAX_BYTES) return 'gambar terlalu besar (maks. 700 KB)'
+  const bytes = Buffer.from(await file.arrayBuffer())
+  // Trust the bytes, not the browser's content type.
+  const mime =
+    bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg'
+    : bytes.subarray(0, 4).toString('hex') === '89504e47' ? 'image/png'
+    : bytes.subarray(8, 12).toString('latin1') === 'WEBP' ? 'image/webp'
+    : null
+  if (!mime) return 'gambar harus JPG, PNG, atau WebP'
+  return { mime, data: bytes.toString('base64') }
 }
 
 export async function deleteQuestion(sessionId: string, questionId: string) {
@@ -293,8 +320,8 @@ export async function forceSubmitAll(sessionId: string) {
 export async function duplicateSession(sessionId: string) {
   await requireAdmin()
   const source: Session = must(await db().from('exam_sessions').select('*').eq('id', sessionId).single())
-  const questions: Pick<Question, 'type' | 'text' | 'options' | 'answer_index' | 'position'>[] = must(
-    await db().from('questions').select('type, text, options, answer_index, position').eq('session_id', sessionId).order('position'),
+  const questions: Pick<Question, 'id' | 'type' | 'text' | 'options' | 'answer_index' | 'position' | 'image_rev'>[] = must(
+    await db().from('questions').select('id, type, text, options, answer_index, position, image_rev').eq('session_id', sessionId).order('position'),
   )
 
   const newKind = source.kind === 'pre' ? 'post' : 'pre'
@@ -330,11 +357,21 @@ export async function duplicateSession(sessionId: string) {
   if (!newSessionId) throw new Error('Gagal membuat kode sesi unik')
 
   if (questions.length) {
-    must(
+    const copies: { id: string; position: number }[] = must(
       await db()
         .from('questions')
-        .insert(questions.map((q) => ({ ...q, session_id: newSessionId }))),
+        .insert(questions.map((q) => ({ type: q.type, text: q.text, options: q.options, answer_index: q.answer_index, position: q.position, image_rev: q.image_rev, session_id: newSessionId })))
+        .select('id, position'),
     )
+    const withImage = questions.filter((q) => q.image_rev)
+    if (withImage.length) {
+      const images: { question_id: string; mime: string; data: string }[] = must(
+        await db().from('question_images').select('question_id, mime, data').in('question_id', withImage.map((q) => q.id)),
+      )
+      const newId = new Map(copies.map((c) => [c.position, c.id]))
+      const oldPos = new Map(questions.map((q) => [q.id, q.position]))
+      must(await db().from('question_images').insert(images.map((img) => ({ ...img, question_id: newId.get(oldPos.get(img.question_id)!)! }))))
+    }
   }
   redirect(`/admin/sessions/${newSessionId}?msg=${encodeURIComponent(`Sesi berhasil diduplikasi (${questions.length} soal disalin)`)}`)
 }

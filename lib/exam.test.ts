@@ -190,7 +190,7 @@ describe('planAnswer', () => {
 describe('buildView', () => {
   it('shows only the current question in per-question mode and never the answer key', () => {
     const v = buildView(attempt({ current_index: 1 }), session({ timer_mode: 'per_question' }), questions, new Date(T0))
-    expect(v.questions).toEqual([{ id: 'q2', type: 'tf', text: 'Soal q2', options: ['Benar', 'Salah'] }])
+    expect(v.questions).toEqual([{ id: 'q2', type: 'tf', text: 'Soal q2', image: null, options: ['Benar', 'Salah'] }])
     expect(v.question_deadline_at).toBe(T0 + 30_000)
     expect(JSON.stringify(v)).not.toContain('answer_index')
     expect(JSON.stringify(v)).not.toContain('score')

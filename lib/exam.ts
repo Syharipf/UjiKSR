@@ -58,7 +58,11 @@ export interface Question {
   text: string
   options: string[]
   answer_index: number
+  image_rev?: string | null // set when the question has an image (see questionImageUrl)
 }
+
+// The rev changes with the image, so the URL can be cached forever.
+export const questionImageUrl = (q: Pick<Question, 'id' | 'image_rev'>) => (q.image_rev ? `/api/questions/${q.id}/image?v=${q.image_rev}` : null)
 
 export interface Attempt {
   id: string
@@ -84,6 +88,7 @@ export interface PublicQuestion {
   type: 'mc' | 'tf'
   text: string
   options: string[]
+  image: string | null // URL of the question's picture
 }
 
 export interface ExamView {
@@ -248,7 +253,7 @@ export function buildView(
     total: a.question_order.length,
     questions: ids.map((id) => {
       const q = questions[id]
-      return { id, type: q.type, text: q.text, options: a.option_orders[id].map((i) => q.options[i]) }
+      return { id, type: q.type, text: q.text, image: questionImageUrl(q), options: a.option_orders[id].map((i) => q.options[i]) }
     }),
     answers,
     ...(submitted && s.kind === 'post' && s.feedback_url ? { feedback_url: s.feedback_url } : {}),

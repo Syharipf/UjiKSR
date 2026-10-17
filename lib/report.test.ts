@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats, compareScores, recapScores } from './report'
+import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats, compareScores, progressPairs, recapScores } from './report'
 
 describe('compareScores', () => {
   it('joins pre and post by NIM, computes deltas and averages', () => {
@@ -181,6 +181,22 @@ describe('recapScores', () => {
       sessionAverages: [null, null],
       overall: null,
     })
+  })
+})
+
+describe('progressPairs', () => {
+  it('pairs each post-test with its selected pre-test, in any column order', () => {
+    const sessions = [
+      { id: 'post1', pre_session_id: 'pre1' },
+      { id: 'pre1' },
+      { id: 'post2', pre_session_id: 'pre2' }, // pre-test not selected: no pair
+      { id: 'pre3' },
+      { id: 'post3', pre_session_id: 'pre3' },
+    ]
+    expect(progressPairs(sessions, [80, 50, 90, null, 70])).toEqual([
+      { pre: 1, post: 0, delta: 30 },
+      { pre: 3, post: 4, delta: null }, // missed the pre-test
+    ])
   })
 })
 

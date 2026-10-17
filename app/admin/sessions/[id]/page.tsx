@@ -5,7 +5,7 @@ import QRCode from 'qrcode'
 import { requireAdmin } from '@/lib/admin-auth'
 import { finalizeExpired, resultsStatus, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
-import { formatDate, hasStarted, isOpen, type Attempt, type Question, type ResultsStatus, type Session } from '@/lib/exam'
+import { formatDate, hasStarted, isOpen, questionImageUrl, type Attempt, type Question, type ResultsStatus, type Session } from '@/lib/exam'
 import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats } from '@/lib/report'
 import { deleteQuestion, deleteSession, duplicateSession, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
 import LinkPending from '@/app/link-pending'
@@ -318,6 +318,10 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                           </span>
                         )}
                       </div>
+                      {q.image_rev && (
+                        // eslint-disable-next-line @next/next/no-img-element -- served by our API route, already shrunk on upload
+                        <img src={questionImageUrl(q)!} alt={`Gambar soal ${i + 1}`} className="mt-2 max-h-48 rounded-lg border border-line" />
+                      )}
                       <ul className="mt-1 space-y-0.5">
                         {q.options.map((option, j) => (
                           <li key={j} className={j === q.answer_index ? 'font-semibold text-ok' : 'text-secondary'}>

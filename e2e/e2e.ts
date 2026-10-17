@@ -49,7 +49,7 @@ async function createSession(page: Page, title: string, kind: 'pre' | 'post', mo
   const code = (await page.locator('text=/kode [A-Z0-9]{6}/').innerText()).match(/kode ([A-Z0-9]{6})/)![1]
   await page.click('button:has-text("Soal")')
   await page.click('summary:has-text("Upload file soal")')
-  await page.setInputFiles('input[type=file]', CSV)
+  await page.setInputFiles('input[name=file]', CSV)
   await page.click('text=Upload & ganti semua soal')
   await page.getByText('4 soal tersimpan').waitFor()
   await page.click('button:has-text("Kontrol")')
@@ -359,6 +359,18 @@ try {
   assert.equal(anonRecapRes.status(), 401)
   log('rekap page lists many sessions per NIM; CSV export requires admin')
 
+  const raporHref = await adminPage.locator('tbody tr', { hasText: 'Ani' }).getByRole('link', { name: 'Unduh' }).getAttribute('href')
+  const rapor = await adminPage.context().newPage()
+  await rapor.goto(BASE + raporHref)
+  const raporText = await rapor.locator('article').innerText()
+  assert.match(raporText, /Rapor Peserta[\s\S]*Ani[\s\S]*1001[\s\S]*S1 TI/)
+  assert.match(raporText, /Rata-rata \(2 dari 2 ujian\)\s+87\.5/)
+  assert.match(await rapor.title(), /Rapor 1001 Ani/)
+  assert.ok((await rapor.pdf()).length > 1000) // what "Simpan sebagai PDF" produces
+  await rapor.close()
+  assert.equal((await (await browser.newContext()).request.get(BASE + raporHref, { maxRedirects: 0 })).status() >= 300, true)
+  log('rapor per NIM opens from the recap, prints to PDF, and requires admin')
+
 
   // --- automatic close ---------------------------------------------------------------
   // Starting began a 4 × 5 s clock: the session closes by itself and, with nobody working,
@@ -428,6 +440,13 @@ try {
   await addForm.locator('input[name=b]').fill('Biru')
   await addForm.locator('input[name=c]').fill('Hijau')
   await addForm.locator('select[name=answer]').selectOption('C')
+  // A 2×2 PNG; the form re-encodes it to JPEG in the browser before upload.
+  await addForm.locator('input[name=image]').setInputFiles({
+    name: 'luka.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAE0lEQVR4nGP4z8DwnwGM/zMwAAAf7gP9NRsAMwAAAABJRU5ErkJggg==', 'base64'),
+  })
+  await addForm.locator('img[alt="Pratinjau gambar soal"]').waitFor()
   await addForm.locator('button').click()
   await adminPage.getByText('Soal ditambahkan').waitFor()
   await adminPage.click('summary:has-text("Tambah soal manual")')
@@ -441,6 +460,13 @@ try {
   assert.match(await adminPage.locator('ol > li').first().innerText(), /C\. Hijau ✓/)
   assert.match(await adminPage.locator('ol > li').nth(1).innerText(), /Benar ✓/)
   log('manual form adds multiple-choice and true/false questions with the right key')
+
+  const img = adminPage.locator('ol > li').first().locator('img[alt="Gambar soal 1"]')
+  await img.waitFor()
+  assert.ok(await img.evaluate((el: HTMLImageElement) => el.decode().then(() => el.naturalWidth === 2)))
+  const imgRes = await (await browser.newContext()).request.get(BASE + (await img.getAttribute('src')))
+  assert.equal(imgRes.headers()['content-type'], 'image/jpeg')
+  log('a question can carry an image, shrunk to JPEG in the browser and served to anyone with the link')
 
   const first = adminPage.locator('ol > li').first()
   await first.locator('summary:has-text("Edit")').click()
@@ -458,7 +484,7 @@ try {
 
   await adminPage.click('button:has-text("Soal")')
   await adminPage.click('summary:has-text("Upload file soal")')
-  await adminPage.setInputFiles('input[type=file]', { name: 'soal.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK\x03\x04 not really a zip') })
+  await adminPage.setInputFiles('input[name=file]', { name: 'soal.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK\x03\x04 not really a zip') })
   adminPage.once('dialog', (dlg) => dlg.accept())
   await adminPage.click('text=Upload & ganti semua soal')
   await adminPage.getByText(/^Upload gagal/).waitFor()
