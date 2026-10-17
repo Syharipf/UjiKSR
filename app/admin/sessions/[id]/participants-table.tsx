@@ -198,11 +198,11 @@ export default function ParticipantsTable({
                 <td className="p-3 text-secondary">{a.prodi || '–'}</td>
                 <td className="p-3 font-bold">{a.score ?? '–'}</td>
                 <td className="p-3">
-                  {a.violation_count === 0 ? (
+                  {!byAttempt.has(a.id) ? (
                     '0'
                   ) : (
                     <details>
-                      <summary className="cursor-pointer font-semibold text-danger">{a.violation_count}</summary>
+                      <summary className={`cursor-pointer font-semibold ${a.violation_count ? 'text-danger' : 'text-muted'}`}>{a.violation_count}</summary>
                       <ul className="mt-1 space-y-0.5 text-xs text-secondary">
                         {(byAttempt.get(a.id) ?? []).map((v) => (
                           <li key={v.id}>

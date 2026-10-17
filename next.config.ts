@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           // /exam/<attempt id> is the participant's only credential; never send it to other sites.
           { key: "Referrer-Policy", value: "same-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // Camera: the exam page checks the participant faces the phone (lib/face.ts).
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
         ],
       },
       {

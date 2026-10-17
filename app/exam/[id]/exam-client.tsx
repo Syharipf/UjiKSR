@@ -12,6 +12,7 @@ import { clock, GRACE_MS, LOBBY_POLL_MS, type ExamView, type PublicQuestion } fr
 import { enterFullscreen, exitFullscreen, isFullscreen, subscribeFullscreen } from '@/lib/fullscreen'
 import Confetti from './confetti'
 import { useAntiCheat } from './use-anti-cheat'
+import { useFaceWatch } from './use-face-watch'
 import ParticipantFeedbackForm from './feedback-form'
 import { playFinishSound, triggerViolationVibration } from './sound'
 
@@ -103,6 +104,7 @@ export default function ExamClient({ id }: { id: string }) {
   const [fatal, setFatal] = useState<ApiError | null>(null)
   const [notice, setNotice] = useState('')
   const [warning, setWarning] = useState('')
+  const [faceWarning, setFaceWarning] = useState(false)
   const [picked, setPicked] = useState<{ id: string; choice: number } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -140,7 +142,12 @@ export default function ExamClient({ id }: { id: string }) {
       if (now - lastViolationRef.current < 2000) return
       lastViolationRef.current = now
       triggerViolationVibration()
-      setWarning('Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten.')
+      const face = type.startsWith('face_')
+      const base_ = face
+        ? 'Hadapkan wajahmu lurus ke layar. Jangan menoleh atau membaca catatan.'
+        : 'Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten.'
+      setFaceWarning(face)
+      setWarning(base_)
       call(`${base}/violation`, { type }).then(
         (v) => {
           apply(v)
@@ -148,9 +155,8 @@ export default function ExamClient({ id }: { id: string }) {
             setWarning((prev) =>
               prev
                 ? v.max_violations < 999
-                  ? `Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. ` +
-                    `Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
-                  : 'Jangan membuka aplikasi lain, notifikasi, overlay, atau asisten. Pelanggaran dicatat oleh sistem.'
+                  ? `${base_} Pada pelanggaran ke-${v.max_violations}, jawabanmu otomatis dikumpulkan.`
+                  : `${base_} Pelanggaran dicatat oleh sistem.`
                 : '',
             )
           } else if (v.status === 'submitted') {
@@ -190,6 +196,14 @@ export default function ExamClient({ id }: { id: string }) {
 
   const active = view?.status === 'active'
   useAntiCheat(active, reportViolation, active || view?.status === 'waiting')
+  const cameraOk = useFaceWatch(active || view?.status === 'waiting', active && warning === '' && fullscreen, reportViolation)
+  // No camera (denied/unsupported): the exam goes on, the committee just sees a note. Once per page load.
+  const notedRef = useRef(false)
+  useEffect(() => {
+    if (!active || cameraOk || notedRef.current) return
+    notedRef.current = true
+    call(`${base}/violation`, { type: 'no_camera' }).catch(() => {})
+  }, [active, cameraOk, base])
 
   const deadline = view ? (view.question_deadline_at ?? view.deadline_at) : 0
 
@@ -448,7 +462,7 @@ export default function ExamClient({ id }: { id: string }) {
                 </p>
               )}
               <h2 id="lock-title" className="display text-[1.85rem] text-balance">
-                {warning ? 'Kamu keluar dari layar ujian' : 'Layar ujian terkunci'}
+                {!warning ? 'Layar ujian terkunci' : faceWarning ? 'Wajahmu tidak menghadap layar' : 'Kamu keluar dari layar ujian'}
               </h2>
               <p className="text-[#c9d3e3]">{warning || 'Ketuk tombol di bawah untuk kembali ke layar penuh dan melanjutkan ujian.'}</p>
             </div>
