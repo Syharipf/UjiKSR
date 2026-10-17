@@ -111,6 +111,23 @@ export function recapScores(sessionIds: string[], attempts: RecapAttempt[]): Rec
   }
 }
 
+export interface Progress {
+  pre: number // indexes into the selected sessions
+  post: number
+  delta: number | null // post − pre; null when either score is missing
+}
+
+// A participant's pre→post pairs among the selected sessions (a post-test names its pre-test in pre_session_id).
+export function progressPairs(sessions: { id: string; pre_session_id?: string | null }[], scores: (number | null)[]): Progress[] {
+  return sessions.flatMap((s, post) => {
+    const pre = sessions.findIndex((p) => p.id === s.pre_session_id)
+    if (pre < 0) return []
+    const a = scores[pre]
+    const b = scores[post]
+    return [{ pre, post, delta: a !== null && b !== null ? b - a : null }]
+  })
+}
+
 
 export interface SessionStats {
   submittedCount: number

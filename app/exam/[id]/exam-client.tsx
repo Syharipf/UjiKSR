@@ -823,6 +823,10 @@ function QuestionCard({ q, selected, onPick }: { q: PublicQuestion; selected: nu
   return (
     <div className="space-y-4">
       <p data-question className="whitespace-pre-line text-[1.2rem] leading-snug font-semibold">{q.text}</p>
+      {q.image && (
+        // eslint-disable-next-line @next/next/no-img-element -- served by our API route, already shrunk on upload
+        <img src={q.image} alt="Gambar soal" draggable={false} className="pointer-events-none mx-auto max-h-[40dvh] w-auto max-w-full rounded-xl border border-line" />
+      )}
       <div role="group" aria-label="Pilihan jawaban" className="grid gap-2.5">
         {q.options.map((option, i) => {
           const on = selected === i

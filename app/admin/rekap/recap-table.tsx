@@ -447,6 +447,7 @@ export default function RecapTable({
                   Rata-rata {sortIndicator('average')}
                 </div>
               </th>
+              <th className="p-3">Rapor</th>
             </tr>
           </thead>
           <tbody>
@@ -478,11 +479,20 @@ export default function RecapTable({
                     '–'
                   )}
                 </td>
+                <td className="p-3">
+                  <a
+                    href={`/admin/rekap/rapor?${new URLSearchParams([...selected.map((s) => ['s', s.id]), ['nim', r.nim]])}`}
+                    target="_blank"
+                    className="text-xs font-semibold text-primary underline"
+                  >
+                    Unduh
+                  </a>
+                </td>
               </tr>
             ))}
             {!filteredRows.length && (
               <tr>
-                <td colSpan={selected.length + 5} className="p-6 text-muted text-center">
+                <td colSpan={selected.length + 6} className="p-6 text-muted text-center">
                   {recap.rows.length === 0 ? 'Belum ada peserta di sesi terpilih.' : 'Tidak ada peserta yang cocok dengan filter yang dipilih.'}
                 </td>
               </tr>
@@ -502,6 +512,7 @@ export default function RecapTable({
               <td className="p-3 font-extrabold font-mono text-primary text-base">
                 {show(recap.overall)}
               </td>
+              <td className="p-3" />
             </tr>
           </tfoot>
         </table>

@@ -40,6 +40,15 @@
 --     created_at timestamptz not null default now()
 --   );
 --   create index if not exists feedback_session_idx on feedback (session_id, created_at desc);
+-- Upgrading a database created before question images existed? Run just this:
+--   alter table questions add column image_rev text;
+--   create table question_images (
+--     question_id uuid primary key references questions (id) on delete cascade,
+--     mime text not null check (mime in ('image/jpeg', 'image/png', 'image/webp')),
+--     data text not null
+--   );
+--   alter table question_images enable row level security;
+--   grant select, insert, update, delete on question_images to service_role;
 
 create table exam_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -67,9 +76,17 @@ create table questions (
   type text not null check (type in ('mc', 'tf')),
   text text not null,
   options text[] not null,
-  answer_index int not null check (answer_index >= 0 and answer_index < cardinality(options))
+  answer_index int not null check (answer_index >= 0 and answer_index < cardinality(options)),
+  image_rev text -- set when the question has an image (question_images); changes with it so its URL can be cached forever
 );
 create index questions_session_idx on questions (session_id);
+
+-- Kept out of `questions` so the per-request question load stays small; served by /api/questions/[id]/image.
+create table question_images (
+  question_id uuid primary key references questions (id) on delete cascade,
+  mime text not null check (mime in ('image/jpeg', 'image/png', 'image/webp')),
+  data text not null -- base64
+);
 
 create table attempts (
   id uuid primary key default gen_random_uuid(),
@@ -101,6 +118,7 @@ create index violations_attempt_idx on violations (attempt_id);
 
 alter table exam_sessions enable row level security;
 alter table questions enable row level security;
+alter table question_images enable row level security;
 alter table attempts enable row level security;
 alter table violations enable row level security;
 create table feedback (
@@ -150,4 +168,4 @@ revoke execute on function add_violation(uuid, text) from public, anon, authenti
 grant execute on function record_answer(uuid, text, int, int, int, timestamptz) to service_role;
 grant execute on function add_violation(uuid, text) to service_role;
 grant usage on schema public to service_role;
-grant select, insert, update, delete on exam_sessions, questions, attempts, violations, feedback to service_role;
+grant select, insert, update, delete on exam_sessions, questions, question_images, attempts, violations, feedback to service_role;

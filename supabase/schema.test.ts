@@ -72,10 +72,11 @@ describe('schema.sql', () => {
     await expect(bad).rejects.toThrow(/check constraint/)
   })
 
-  it('deleting a session removes its questions, attempts and violations', async () => {
+  it('deleting a session removes its questions, images, attempts and violations', async () => {
     await db.query('select add_violation($1, $2)', [attemptId, 'blur'])
+    await db.query(`insert into question_images (question_id, mime, data) values ($1, 'image/png', 'AA==')`, [q1])
     await db.query('delete from exam_sessions')
-    for (const table of ['questions', 'attempts', 'violations']) {
+    for (const table of ['questions', 'question_images', 'attempts', 'violations']) {
       expect((await db.query(`select * from ${table}`)).rows).toEqual([])
     }
   })
