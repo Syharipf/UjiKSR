@@ -364,7 +364,7 @@ try {
   await rapor.goto(BASE + raporHref)
   const raporText = await rapor.locator('article').innerText()
   assert.match(raporText, /Rapor Peserta[\s\S]*Ani[\s\S]*1001[\s\S]*S1 TI/)
-  assert.match(raporText, /Rata-rata \(2 dari 2 ujian\)\s+87\.5/)
+  assert.match(raporText, /Rata-rata nilai\s+87\.5\s+2 dari 2 ujian diikuti/)
   assert.match(await rapor.title(), /Rapor 1001 Ani/)
   assert.ok((await rapor.pdf()).length > 1000) // what "Simpan sebagai PDF" produces
   await rapor.close()
