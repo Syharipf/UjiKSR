@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export interface NoteItem {
   id: string
@@ -10,7 +10,7 @@ export interface NoteItem {
   created_at: string
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 15
 
 export default function NotesSection({
   notesByTab,
@@ -36,6 +36,8 @@ export default function NotesSection({
   const [activeTab, setActiveTab] = useState<TabId>('speaker')
   const [search, setSearch] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   const activeNotes = notesByTab[activeTab]
 
@@ -43,16 +45,53 @@ export default function NotesSection({
     const q = search.trim().toLowerCase()
     if (!q) return activeNotes
     return activeNotes.filter(
-      (n) => n.text.toLowerCase().includes(q) || n.name.toLowerCase().includes(q) || n.nim.toLowerCase().includes(q),
+      (n) =>
+        n.text.toLowerCase().includes(q) ||
+        n.name.toLowerCase().includes(q) ||
+        n.nim.toLowerCase().includes(q),
     )
   }, [activeNotes, search])
 
   const handleTabChange = (t: TabId) => {
     setActiveTab(t)
     setVisibleCount(PAGE_SIZE)
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0
+    }
+  }
+
+  // IntersectionObserver for infinite scrolling inside the container
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    const container = containerRef.current
+    if (!sentinel || !container) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => Math.min(filteredNotes.length, prev + PAGE_SIZE))
+        }
+      },
+      {
+        root: container,
+        rootMargin: '100px',
+      },
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [filteredNotes.length])
+
+  // Fallback scroll listener for infinite scroll
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
+    if (scrollHeight - scrollTop - clientHeight < 120) {
+      setVisibleCount((prev) => Math.min(filteredNotes.length, prev + PAGE_SIZE))
+    }
   }
 
   const pagedNotes = filteredNotes.slice(0, visibleCount)
+  const hasMore = visibleCount < filteredNotes.length
 
   return (
     <section aria-labelledby="notes-heading" className="card space-y-4 p-5 sm:p-6">
@@ -101,14 +140,32 @@ export default function NotesSection({
         })}
       </div>
 
-      {/* Notes List */}
-      <div className="space-y-3">
-        {filteredNotes.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted">
-            {search ? 'Tidak ada masukan yang cocok dengan pencarian.' : 'Belum ada masukan untuk kategori ini.'}
-          </p>
-        ) : (
-          pagedNotes.map((n) => (
+      {/* Counter & Indicator */}
+      {filteredNotes.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted px-1">
+          <span>
+            Menampilkan {pagedNotes.length} dari {filteredNotes.length} masukan
+          </span>
+          {hasMore && (
+            <span className="text-[0.7rem] text-secondary">
+              Gulir ke bawah untuk memuat otomatis
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Scrollable Container with Infinite Scroll */}
+      {filteredNotes.length === 0 ? (
+        <div className="rounded-xl border border-line bg-subtle/20 p-8 text-center text-sm text-muted">
+          {search ? 'Tidak ada masukan yang cocok dengan pencarian.' : 'Belum ada masukan untuk kategori ini.'}
+        </div>
+      ) : (
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="max-h-[520px] overflow-y-auto rounded-xl border border-line bg-subtle/20 p-2.5 sm:p-3 space-y-3"
+        >
+          {pagedNotes.map((n) => (
             <div key={n.id} className="rounded-xl border border-line bg-surface p-4 text-xs space-y-2">
               <p className="text-sm text-fg whitespace-pre-wrap leading-relaxed">&ldquo;{n.text}&rdquo;</p>
               <div className="flex items-center justify-between text-muted text-[0.75rem] pt-1 border-t border-line/50">
@@ -126,22 +183,22 @@ export default function NotesSection({
                 </span>
               </div>
             </div>
-          ))
-        )}
+          ))}
 
-        {/* Load More Button (Pagination 20) */}
-        {visibleCount < filteredNotes.length && (
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredNotes.length))}
-              className="btn btn-secondary text-xs h-10 px-5 cursor-pointer font-semibold"
-            >
-              Lihat {Math.min(PAGE_SIZE, filteredNotes.length - visibleCount)} lainnya
-            </button>
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="py-2 text-center text-xs text-muted">
+            {hasMore ? (
+              <span className="inline-flex items-center gap-1.5 animate-pulse">
+                <span>Memuat masukan lainnya...</span>
+              </span>
+            ) : (
+              <span className="text-[0.7rem] text-muted">
+                Semua {filteredNotes.length} masukan telah ditampilkan
+              </span>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   )
 }
