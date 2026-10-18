@@ -107,12 +107,12 @@ describe('calculateQuestionAccuracy', () => {
 describe('calculateScoreDistribution', () => {
   it('buckets scores into tiers and computes pass rates', () => {
     const attempts = [
-      { score: 95, submitted_at: '2026-10-10T10:00:00Z' }, // 90-100
-      { score: 85, submitted_at: '2026-10-10T10:01:00Z' }, // 80-89
-      { score: 75, submitted_at: '2026-10-10T10:02:00Z' }, // 70-79
-      { score: 65, submitted_at: '2026-10-10T10:03:00Z' }, // 60-69
-      { score: 50, submitted_at: '2026-10-10T10:04:00Z' }, // < 60
-      { score: null, submitted_at: null }, // unsubmitted, ignored
+      { name: 'Ani', nim: '1001', score: 95, submitted_at: '2026-10-10T10:00:00Z' }, // 90-100
+      { name: 'Budi', nim: '1002', score: 85, submitted_at: '2026-10-10T10:01:00Z' }, // 80-89
+      { name: 'Cici', nim: '1003', score: 75, submitted_at: '2026-10-10T10:02:00Z' }, // 70-79
+      { name: 'Dedi', nim: '1004', score: 65, submitted_at: '2026-10-10T10:03:00Z' }, // 60-69
+      { name: 'Eka', nim: '1005', score: 50, submitted_at: '2026-10-10T10:04:00Z' }, // < 60
+      { name: 'Fani', nim: '1006', score: null, submitted_at: null }, // unsubmitted, ignored
     ]
     const dist = calculateScoreDistribution(attempts, 70)
     expect(dist.totalGraded).toBe(5)
@@ -121,11 +121,11 @@ describe('calculateScoreDistribution', () => {
     expect(dist.passRate).toBe(60) // 3/5 = 60%
 
     expect(dist.tiers).toEqual([
-      { range: '90–100', label: 'Istimewa', count: 1, percentage: 20 },
-      { range: '80–89', label: 'Sangat Baik', count: 1, percentage: 20 },
-      { range: '70–79', label: 'Baik', count: 1, percentage: 20 },
-      { range: '60–69', label: 'Cukup', count: 1, percentage: 20 },
-      { range: '< 60', label: 'Kurang', count: 1, percentage: 20 },
+      { range: '90–100', label: 'Istimewa', count: 1, percentage: 20, participants: [{ name: 'Ani', nim: '1001', score: 95 }] },
+      { range: '80–89', label: 'Sangat Baik', count: 1, percentage: 20, participants: [{ name: 'Budi', nim: '1002', score: 85 }] },
+      { range: '70–79', label: 'Baik', count: 1, percentage: 20, participants: [{ name: 'Cici', nim: '1003', score: 75 }] },
+      { range: '60–69', label: 'Cukup', count: 1, percentage: 20, participants: [{ name: 'Dedi', nim: '1004', score: 65 }] },
+      { range: '< 60', label: 'Kurang', count: 1, percentage: 20, participants: [{ name: 'Eka', nim: '1005', score: 50 }] },
     ])
   })
 

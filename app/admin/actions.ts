@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { COOKIE, makeToken, passwordMatches, TTL_MS } from '@/lib/admin-token'
 import { parseQuestionsCsv, toQuestion } from '@/lib/csv'
 import { parseQuestionsXlsx } from '@/lib/excel'
-import { finishRound, forceSubmitAll as attemptsForceSubmitAll, UUID } from '@/lib/attempts'
+import { finishRound, forceSubmitAll as attemptsForceSubmitAll, invalidateResultsStatus, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { cleanTopic, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
@@ -199,6 +199,46 @@ export async function startExam(id: string) {
   // Lobby attempts carry placeholder clocks from their join; a join landing after this is re-timed by sync().
   must(await db().from('attempts').update(clock).eq('session_id', id).is('submitted_at', null).lt('started_at', clock.started_at))
   back(id, 'Ujian dimulai')
+}
+
+// Adds extra time to a running session, extending closes_at and all active attempts' deadlines.
+export async function extendSession(id: string, formData: FormData) {
+  await requireAdmin()
+  const raw = formData.get('minutes')
+  const minutes = Math.round(Number(raw))
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 180) {
+    return back(id, 'Waktu tambahan tidak valid (1–180 menit)')
+  }
+  const s = await timerRow(id)
+  if (!s.started_at) return back(id, 'Waktu hanya bisa ditambah saat ujian sudah dimulai')
+  if (!s.is_open) return back(id, 'Sesi sudah ditutup')
+
+  const addedSec = minutes * 60
+  const now = Date.now()
+  const currentClosesAt = s.closes_at ? Date.parse(s.closes_at) : now
+  const baseTime = Math.max(now, currentClosesAt)
+  const newClosesAt = new Date(baseTime + addedSec * 1000)
+
+  const sessionUpdate: { closes_at: string; duration_sec?: number } = {
+    closes_at: newClosesAt.toISOString(),
+  }
+  if (s.timer_mode === 'total') {
+    const startedAtMs = Date.parse(s.started_at)
+    sessionUpdate.duration_sec = Math.max(s.duration_sec + addedSec, Math.round((newClosesAt.getTime() - startedAtMs) / 1000))
+  }
+  must(await db().from('exam_sessions').update(sessionUpdate).eq('id', id))
+
+  // Update deadline_at for all participants who are currently still working
+  must(
+    await db()
+      .from('attempts')
+      .update({ deadline_at: newClosesAt.toISOString() })
+      .eq('session_id', id)
+      .is('submitted_at', null),
+  )
+
+  invalidateResultsStatus(id)
+  back(id, `Waktu ujian berhasil ditambah ${minutes} menit`)
 }
 
 // Questions, attempts and violations go with it (on delete cascade).

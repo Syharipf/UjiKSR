@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { ScoreDistribution } from '@/lib/report'
 
 const TIER_COLORS: Record<string, { bar: string; text: string }> = {
@@ -23,6 +24,7 @@ export default function SessionCharts({
   workingCount: number
   submittedCount: number
 }>) {
+  const [openTier, setOpenTier] = useState<string | null>(null)
   if (totalAttempts === 0) return null
 
   const maxTierCount = Math.max(1, ...distribution.tiers.map((t) => t.count))
@@ -57,24 +59,59 @@ export default function SessionCharts({
             {distribution.tiers.map((tier) => {
               const color = TIER_COLORS[tier.range] ?? { bar: 'bg-primary', text: 'text-primary' }
               const widthPct = Math.round((tier.count / maxTierCount) * 100)
+              const isOpen = openTier === tier.range
+              const hasParticipants = (tier.participants?.length ?? 0) > 0
               return (
-                <div key={tier.range} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold">
-                      {tier.range}{' '}
-                      <span className="font-normal text-muted">({tier.label})</span>
-                    </span>
-                    <span className="text-muted">
-                      <b className={`font-semibold ${tier.count > 0 ? color.text : 'text-fg'}`}>{tier.count}</b> orang{' '}
-                      ({tier.percentage}%)
-                    </span>
-                  </div>
-                  <div className="h-3 w-full overflow-hidden rounded-full bg-subtle">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${color.bar}`}
-                      style={{ width: `${tier.count > 0 ? Math.max(4, widthPct) : 0}%` }}
-                    />
-                  </div>
+                <div key={tier.range} className="space-y-1 rounded-xl border border-line/60 bg-surface/50 p-2.5 transition-colors hover:border-line">
+                  <button
+                    type="button"
+                    disabled={!hasParticipants}
+                    onClick={() => setOpenTier(isOpen ? null : tier.range)}
+                    className={`w-full text-left ${hasParticipants ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold flex items-center gap-1.5">
+                        <span>{tier.range}</span>
+                        <span className="font-normal text-muted">({tier.label})</span>
+                        {hasParticipants && (
+                          <span className="text-[0.7rem] text-primary hover:underline">
+                            {isOpen ? 'Tutup ▲' : 'Lihat peserta ▼'}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-muted">
+                        <b className={`font-semibold ${tier.count > 0 ? color.text : 'text-fg'}`}>{tier.count}</b> orang{' '}
+                        ({tier.percentage}%)
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-3 w-full overflow-hidden rounded-full bg-subtle">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${color.bar}`}
+                        style={{ width: `${tier.count > 0 ? Math.max(4, widthPct) : 0}%` }}
+                      />
+                    </div>
+                  </button>
+                  {isOpen && hasParticipants && (
+                    <div className="mt-2.5 space-y-1.5 rounded-lg border border-line bg-subtle/40 p-2.5 text-xs animate-in">
+                      <div className="flex items-center justify-between border-b border-line px-1 pb-1 text-[0.7rem] font-semibold text-muted">
+                        <span>Peserta ({tier.participants.length})</span>
+                        <span>Nilai</span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                        {tier.participants.map((p, idx) => (
+                          <div key={`${p.nim}-${idx}`} className="flex items-center justify-between gap-2 rounded p-1 text-secondary hover:bg-surface">
+                            <div className="flex min-w-0 items-center gap-1.5 truncate">
+                              <span className="truncate font-medium text-fg">{p.name}</span>
+                              <span className="shrink-0 font-mono text-[0.7rem] text-muted">({p.nim})</span>
+                            </div>
+                            <span className={`badge shrink-0 border border-line bg-surface px-2 py-0.5 text-xs font-bold ${color.text}`}>
+                              {p.score}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}

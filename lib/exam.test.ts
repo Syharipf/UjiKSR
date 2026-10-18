@@ -254,4 +254,13 @@ describe('buildView', () => {
     expect(buildView(done, session(), questions, new Date(T0), { released: true, at: null }, null).pre_score).toBeNull()
     expect('pre_score' in buildView(done, session(), questions, new Date(T0), { released: true, at: null })).toBe(false)
   })
+
+  it('reflects updated deadline_at when session time is extended', () => {
+    const normal = attempt({ deadline_at: iso(T0 + 600_000) })
+    const extended = attempt({ deadline_at: iso(T0 + 900_000) })
+    const v1 = buildView(normal, session(), questions, new Date(T0))
+    const v2 = buildView(extended, session({ closes_at: iso(T0 + 900_000), duration_sec: 900 }), questions, new Date(T0))
+    expect(v1.deadline_at).toBe(T0 + 600_000)
+    expect(v2.deadline_at).toBe(T0 + 900_000)
+  })
 })

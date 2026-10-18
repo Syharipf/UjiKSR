@@ -184,11 +184,18 @@ export function calculateQuestionAccuracy(
   return result
 }
 
+export interface ParticipantScore {
+  name: string
+  nim: string
+  score: number
+}
+
 export interface ScoreTier {
   range: string
   label: string
   count: number
   percentage: number
+  participants: ParticipantScore[]
 }
 
 export interface ScoreDistribution {
@@ -200,38 +207,49 @@ export interface ScoreDistribution {
 }
 
 export function calculateScoreDistribution(
-  attempts: Pick<Attempt, 'score' | 'submitted_at'>[],
+  attempts: (Pick<Attempt, 'score' | 'submitted_at'> & Partial<Pick<Attempt, 'name' | 'nim'>>)[],
   passThreshold = 70,
 ): ScoreDistribution {
-  const scores = attempts
-    .filter((a) => a.submitted_at !== null && a.score !== null)
-    .map((a) => a.score as number)
-
-  const total = scores.length
-  let c90_100 = 0
-  let c80_89 = 0
-  let c70_79 = 0
-  let c60_69 = 0
-  let cBelow60 = 0
+  const graded = attempts.filter((a) => a.submitted_at !== null && a.score !== null)
+  const total = graded.length
   let passed = 0
 
-  for (const s of scores) {
+  const p90_100: ParticipantScore[] = []
+  const p80_89: ParticipantScore[] = []
+  const p70_79: ParticipantScore[] = []
+  const p60_69: ParticipantScore[] = []
+  const pBelow60: ParticipantScore[] = []
+
+  for (const a of graded) {
+    const s = a.score as number
+    const p: ParticipantScore = {
+      name: a.name ?? 'Peserta',
+      nim: a.nim ?? '-',
+      score: s,
+    }
     if (s >= passThreshold) passed++
-    if (s >= 90) c90_100++
-    else if (s >= 80) c80_89++
-    else if (s >= 70) c70_79++
-    else if (s >= 60) c60_69++
-    else cBelow60++
+    if (s >= 90) p90_100.push(p)
+    else if (s >= 80) p80_89.push(p)
+    else if (s >= 70) p70_79.push(p)
+    else if (s >= 60) p60_69.push(p)
+    else pBelow60.push(p)
   }
+
+  const sortFn = (x: ParticipantScore, y: ParticipantScore) => y.score - x.score || x.name.localeCompare(y.name)
+  p90_100.sort(sortFn)
+  p80_89.sort(sortFn)
+  p70_79.sort(sortFn)
+  p60_69.sort(sortFn)
+  pBelow60.sort(sortFn)
 
   const pct = (c: number) => (total > 0 ? Math.round((c / total) * 100) : 0)
 
   const tiers: ScoreTier[] = [
-    { range: '90–100', label: 'Istimewa', count: c90_100, percentage: pct(c90_100) },
-    { range: '80–89', label: 'Sangat Baik', count: c80_89, percentage: pct(c80_89) },
-    { range: '70–79', label: 'Baik', count: c70_79, percentage: pct(c70_79) },
-    { range: '60–69', label: 'Cukup', count: c60_69, percentage: pct(c60_69) },
-    { range: '< 60', label: 'Kurang', count: cBelow60, percentage: pct(cBelow60) },
+    { range: '90–100', label: 'Istimewa', count: p90_100.length, percentage: pct(p90_100.length), participants: p90_100 },
+    { range: '80–89', label: 'Sangat Baik', count: p80_89.length, percentage: pct(p80_89.length), participants: p80_89 },
+    { range: '70–79', label: 'Baik', count: p70_79.length, percentage: pct(p70_79.length), participants: p70_79 },
+    { range: '60–69', label: 'Cukup', count: p60_69.length, percentage: pct(p60_69.length), participants: p60_69 },
+    { range: '< 60', label: 'Kurang', count: pBelow60.length, percentage: pct(pBelow60.length), participants: pBelow60 },
   ]
 
   return {

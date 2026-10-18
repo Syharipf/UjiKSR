@@ -9,7 +9,7 @@ import type { FeedbackRow } from '@/lib/feedback'
 import FeedbackCharts, { type ChartDistribution } from './charts'
 import MaterialsSection, { type MaterialGroup } from './materials-section'
 import NotesSection, { type NoteItem } from './notes-section'
-
+import UnfilledFeedbackSection from './unfilled-section'
 const formatDec = (val: number) => val.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
 export default async function AdminFeedbackPage(props: PageProps<'/admin/sessions/[id]/feedback'>) {
@@ -24,13 +24,23 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
 
   // Fetch all attempts count and feedback rows
   const [attemptsRes, feedbackRes] = await Promise.all([
-    db().from('attempts').select('id, name, nim, prodi').eq('session_id', id),
+    db().from('attempts').select('id, name, nim, prodi, submitted_at').eq('session_id', id).order('name'),
     db().from('feedback').select('*, attempts(name, nim, prodi)').eq('session_id', id).order('created_at', { ascending: false }),
   ])
 
   const attempts = attemptsRes.data || []
   const feedbacks = feedbackRes.data || []
 
+  const feedbackAttemptIds = new Set(feedbacks.map((f) => f.attempt_id))
+  const unfilledParticipants = attempts
+    .filter((a) => !feedbackAttemptIds.has(a.id))
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      nim: a.nim,
+      prodi: a.prodi,
+      submitted_at: a.submitted_at ?? null,
+    }))
   const totalAttempts = attempts.length
   const totalFeedback = feedbacks.length
   const percentFilled = totalAttempts > 0 ? Math.round((totalFeedback / totalAttempts) * 100) : 0
@@ -76,12 +86,19 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
 
   // 3. Score Distributions (3 Charts)
   const countDistribution = (getter: (f: FeedbackRow) => number | null | undefined) => {
-    const dist: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+    const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+    const participants: Record<number, { name: string; nim: string }[]> = { 5: [], 4: [], 3: [], 2: [], 1: [] }
     for (const f of feedbacks) {
       const v = getter(f as unknown as FeedbackRow)
-      if (v && v >= 1 && v <= 5) dist[v] = (dist[v] || 0) + 1
+      if (v && v >= 1 && v <= 5) {
+        counts[v] = (counts[v] || 0) + 1
+        const attempt = f.attempts && typeof f.attempts === 'object' ? f.attempts : null
+        const name = attempt && typeof (attempt as Record<string, unknown>).name === 'string' ? String((attempt as Record<string, unknown>).name) : 'Peserta'
+        const nim = attempt && typeof (attempt as Record<string, unknown>).nim === 'string' ? String((attempt as Record<string, unknown>).nim) : '-'
+        participants[v].push({ name, nim })
+      }
     }
-    return dist
+    return { counts, participants }
   }
 
   const distOverall = countDistribution((f) => f.rating_overall)
@@ -90,9 +107,9 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
 
   const maxVoteInAnyBar = Math.max(
     1,
-    ...Object.values(distOverall),
-    ...Object.values(distUnderstanding),
-    ...Object.values(distRoom),
+    ...Object.values(distOverall.counts),
+    ...Object.values(distUnderstanding.counts),
+    ...Object.values(distRoom.counts),
   )
 
   const chartsData: [ChartDistribution, ChartDistribution, ChartDistribution] = [
@@ -100,21 +117,24 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
       title: 'Keseluruhan Pertemuan',
       subtitle: 'Sangat buruk → Sangat baik',
       totalVotes: totalFeedback,
-      counts: distOverall,
+      counts: distOverall.counts,
+      participants: distOverall.participants,
       maxScale: maxVoteInAnyBar,
     },
     {
       title: 'Pemahaman Materi',
       subtitle: 'Tidak paham → Sangat paham',
       totalVotes: totalFeedback,
-      counts: distUnderstanding,
+      counts: distUnderstanding.counts,
+      participants: distUnderstanding.participants,
       maxScale: maxVoteInAnyBar,
     },
     {
       title: 'Kondisi Ruangan',
       subtitle: 'Sangat buruk → Sangat baik',
       totalVotes: roomFeedbacks.length,
-      counts: distRoom,
+      counts: distRoom.counts,
+      participants: distRoom.participants,
       maxScale: maxVoteInAnyBar,
     },
   ]
@@ -189,7 +209,14 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
       {/* 2. Ringkasan 4 Kartu */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="card p-4 space-y-1">
-          <p className="text-xs font-medium text-muted">Pengisi Feedback</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted">Pengisi Feedback</p>
+            {unfilledParticipants.length > 0 && (
+              <a href="#belum-mengisi" className="text-[0.7rem] font-semibold text-warn hover:underline">
+                {unfilledParticipants.length} belum
+              </a>
+            )}
+          </div>
           <p className="display text-2xl sm:text-3xl font-extrabold text-fg">
             {totalFeedback} <span className="text-sm font-normal text-muted">/ {totalAttempts}</span>
           </p>
@@ -220,6 +247,9 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
           <p className="text-xs text-secondary">{roomFeedbacks.length} peserta menilai ruangan</p>
         </div>
       </section>
+
+      {/* 2.5. Peserta Belum Mengisi Feedback */}
+      <UnfilledFeedbackSection participants={unfilledParticipants} />
 
       {/* 3. Materi yang ditulis peserta */}
       <MaterialsSection groups={materialGroups} />

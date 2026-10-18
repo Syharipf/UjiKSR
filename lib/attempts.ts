@@ -112,6 +112,10 @@ export function resultsStatus(session: Session): Promise<ResultsStatus> {
   return status
 }
 
+export function invalidateResultsStatus(sessionId: string) {
+  recent.delete(sessionId)
+}
+
 export async function view(ctx: Ctx, now: Date) {
   const results = ctx.attempt.submitted_at ? await resultsStatus(ctx.session) : undefined
   const pre = results?.released && ctx.session.kind === 'post' && ctx.session.pre_session_id ? await preScore(ctx.session.pre_session_id, ctx.attempt.nim) : undefined

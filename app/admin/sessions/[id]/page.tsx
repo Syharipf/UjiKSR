@@ -7,10 +7,11 @@ import { finalizeExpired, resultsStatus, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { formatDate, hasStarted, isOpen, questionImageUrl, type Attempt, type Question, type ResultsStatus, type Session } from '@/lib/exam'
 import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats } from '@/lib/report'
-import { deleteQuestion, deleteSession, duplicateSession, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
+import { deleteQuestion, deleteSession, duplicateSession, extendSession, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
 import LinkPending from '@/app/link-pending'
 import ParticipantsTable from './participants-table'
 import SessionCharts from './session-charts'
+import UnfilledFeedbackSection from './feedback/unfilled-section'
 import SubmitButton from '@/app/submit-button'
 import QuestionUploader from './question-uploader'
 import QuestionForm from '../../question-form'
@@ -60,7 +61,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
     session.kind === 'post'
       ? db()
           .from('feedback')
-          .select('id')
+          .select('id, attempt_id')
           .eq('session_id', id)
           .then((r) => r.data || [])
       : Promise.resolve([]),
@@ -76,6 +77,12 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
   const lobby = open && !session.started_at
   const started = hasStarted(session, serverNow)
   const stats = calculateSessionStats(attempts)
+  const fbAttemptIds = new Set(feedbacks.map((f: { attempt_id?: string }) => f.attempt_id))
+  const unfilledFeedbackParticipants = session.kind === 'post'
+    ? attempts
+        .filter((a) => !fbAttemptIds.has(a.id))
+        .map((a) => ({ id: a.id, name: a.name, nim: a.nim, prodi: a.prodi, submitted_at: a.submitted_at }))
+    : []
   const accuracy = calculateQuestionAccuracy(questions, attempts)
   const distribution = calculateScoreDistribution(attempts)
   const h = await headers()
@@ -202,6 +209,51 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
                       <a href={`/admin/sessions/${id}/feedback-qr`} target="_blank" className="btn btn-secondary">
                         Tayangkan QR Feedback
                       </a>
+                    )}
+                    {open && session.started_at && (
+                      <details className="relative inline-block">
+                        <summary className="btn btn-secondary cursor-pointer list-none flex items-center gap-1.5">
+                          <span>⏱ + Tambah waktu</span>
+                          <span className="text-xs opacity-70">▼</span>
+                        </summary>
+                        <div className="absolute left-0 z-20 mt-2 w-72 rounded-xl border border-line bg-surface p-3.5 shadow-lg space-y-3">
+                          <div className="space-y-0.5">
+                            <p className="font-semibold text-xs text-fg">Tambah Waktu Ujian</p>
+                            <p className="text-[0.75rem] text-muted">Waktu bertambah langsung untuk semua peserta yang sedang mengerjakan.</p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {[5, 10, 15].map((m) => (
+                              <form key={m} action={extendSession.bind(null, id)}>
+                                <input type="hidden" name="minutes" value={m} />
+                                <SubmitButton
+                                  confirm={`Tambah waktu ujian ${m} menit untuk semua peserta yang sedang mengerjakan?`}
+                                  className="btn btn-secondary w-full text-xs py-1.5 justify-center"
+                                >
+                                  +{m} mnt
+                                </SubmitButton>
+                              </form>
+                            ))}
+                          </div>
+                          <form action={extendSession.bind(null, id)} className="flex items-center gap-1.5 pt-1 border-t border-line">
+                            <input
+                              type="number"
+                              name="minutes"
+                              min={1}
+                              max={180}
+                              defaultValue={5}
+                              placeholder="Menit"
+                              className="field flex-1 text-xs py-1.5 px-2.5 h-8"
+                              required
+                            />
+                            <SubmitButton
+                              confirm="Tambah waktu ujian sesuai menit yang diisi untuk semua peserta?"
+                              className="btn btn-primary text-xs py-1.5 px-3 h-8 shrink-0"
+                            >
+                              Tambah
+                            </SubmitButton>
+                          </form>
+                        </div>
+                      </details>
                     )}
                     {!open ? (
                       <form action={setOpen.bind(null, id, true)}>
@@ -373,22 +425,26 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
           ),
 
           feedback: session.kind === 'post' ? (
-            <section className="card space-y-4 p-4 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="display text-lg">Feedback Peserta ({feedbacks.length})</h2>
-                  <p className="text-sm text-muted">Lihat analitik lengkap, distribusi rating, dan tanggapan materi.</p>
+            <div className="space-y-4">
+              <section className="card space-y-4 p-4 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="display text-lg">Feedback Peserta ({feedbacks.length})</h2>
+                    <p className="text-sm text-muted">Lihat analitik lengkap, distribusi rating, dan tanggapan materi.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <a href={`/admin/sessions/${id}/feedback-qr`} target="_blank" className="btn btn-secondary text-sm">
+                      Tayangkan QR Feedback
+                    </a>
+                    <Link href={`/admin/sessions/${id}/feedback`} className="btn btn-primary text-sm">
+                      Buka Halaman Analisis Feedback <LinkPending />
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <a href={`/admin/sessions/${id}/feedback-qr`} target="_blank" className="btn btn-secondary text-sm">
-                    Tayangkan QR Feedback
-                  </a>
-                  <Link href={`/admin/sessions/${id}/feedback`} className="btn btn-primary text-sm">
-                    Buka Halaman Analisis Feedback <LinkPending />
-                  </Link>
-                </div>
-              </div>
-            </section>
+              </section>
+
+              <UnfilledFeedbackSection participants={unfilledFeedbackParticipants} />
+            </div>
           ) : undefined,
 
           pengaturan: (
