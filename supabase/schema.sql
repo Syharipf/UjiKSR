@@ -31,12 +31,12 @@
 --     materi text not null check (char_length(materi) between 1 and 200),
 --     rating_overall smallint not null check (rating_overall between 1 and 5),
 --     rating_understanding smallint not null check (rating_understanding between 1 and 5),
---     rating_room smallint check (rating_room between 1 and 5),
---     note_speaker text check (char_length(note_speaker) <= 2000),
---     note_material text check (char_length(note_material) <= 2000),
---     note_practice text check (char_length(note_practice) <= 2000),
---     note_room text check (char_length(note_room) <= 2000),
---     note_next text check (char_length(note_next) <= 2000),
+--     rating_room smallint not null check (rating_room between 1 and 5),
+--     note_speaker text not null check (char_length(note_speaker) between 1 and 2000),
+--     note_material text not null check (char_length(note_material) between 1 and 2000),
+--     note_practice text not null check (char_length(note_practice) between 1 and 2000),
+--     note_room text not null check (char_length(note_room) between 1 and 2000),
+--     note_next text not null check (char_length(note_next) between 1 and 2000),
 --     created_at timestamptz not null default now()
 --   );
 --   create index if not exists feedback_session_idx on feedback (session_id, created_at desc);
@@ -131,12 +131,12 @@ create table feedback (
   materi text not null check (char_length(materi) between 1 and 200),
   rating_overall smallint not null check (rating_overall between 1 and 5),
   rating_understanding smallint not null check (rating_understanding between 1 and 5),
-  rating_room smallint check (rating_room between 1 and 5),
-  note_speaker text check (char_length(note_speaker) <= 2000),
-  note_material text check (char_length(note_material) <= 2000),
-  note_practice text check (char_length(note_practice) <= 2000),
-  note_room text check (char_length(note_room) <= 2000),
-  note_next text check (char_length(note_next) <= 2000),
+  rating_room smallint not null check (rating_room between 1 and 5),
+  note_speaker text not null check (char_length(note_speaker) between 1 and 2000),
+  note_material text not null check (char_length(note_material) between 1 and 2000),
+  note_practice text not null check (char_length(note_practice) between 1 and 2000),
+  note_room text not null check (char_length(note_room) between 1 and 2000),
+  note_next text not null check (char_length(note_next) between 1 and 2000),
   created_at timestamptz not null default now()
 );
 create index feedback_session_idx on feedback (session_id, created_at desc);

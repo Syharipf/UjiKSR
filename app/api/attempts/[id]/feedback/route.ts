@@ -38,12 +38,12 @@ export async function POST(req: Request, ctx: RouteContext<'/api/attempts/[id]/f
       materi: data.materi,
       rating_overall: data.rating_overall,
       rating_understanding: data.rating_understanding,
-      rating_room: data.rating_room ?? null,
-      note_speaker: data.note_speaker ?? null,
-      note_material: data.note_material ?? null,
-      note_practice: data.note_practice ?? null,
-      note_room: data.note_room ?? null,
-      note_next: data.note_next ?? null,
+      rating_room: data.rating_room,
+      note_speaker: data.note_speaker,
+      note_material: data.note_material,
+      note_practice: data.note_practice,
+      note_room: data.note_room,
+      note_next: data.note_next,
     })
 
     if (insertRes.error) {
@@ -67,12 +67,12 @@ export async function POST(req: Request, ctx: RouteContext<'/api/attempts/[id]/f
         materi: data.materi,
         rating_overall: data.rating_overall,
         rating_understanding: data.rating_understanding,
-        rating_room: data.rating_room ?? '-',
-        note_speaker: data.note_speaker ?? '-',
-        note_material: data.note_material ?? '-',
-        note_practice: data.note_practice ?? '-',
-        note_room: data.note_room ?? '-',
-        note_next: data.note_next ?? '-',
+        rating_room: data.rating_room,
+        note_speaker: data.note_speaker,
+        note_material: data.note_material,
+        note_practice: data.note_practice,
+        note_room: data.note_room,
+        note_next: data.note_next,
       }
       await sendToGoogleSheets(exam.session.feedback_webhook_url, sheetsPayload)
     }

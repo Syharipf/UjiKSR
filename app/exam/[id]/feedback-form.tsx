@@ -86,6 +86,24 @@ export default function ParticipantFeedbackForm({
     if (!ratingUnderstanding) {
       validationErrors.rating_understanding = 'Pilih salah satu nilai.'
     }
+    if (!ratingRoom) {
+      validationErrors.rating_room = 'Pilih salah satu nilai ruangan.'
+    }
+    if (!noteSpeaker.trim()) {
+      validationErrors.note_speaker = 'Tulis masukan dan saran untuk pemateri.'
+    }
+    if (!noteMaterial.trim()) {
+      validationErrors.note_material = 'Tulis kritik dan saran mengenai materi.'
+    }
+    if (!notePractice.trim()) {
+      validationErrors.note_practice = 'Tulis masukan terkait penjelasan praktik.'
+    }
+    if (!noteRoom.trim()) {
+      validationErrors.note_room = 'Tulis saran terkait ruangan yang digunakan.'
+    }
+    if (!noteNext.trim()) {
+      validationErrors.note_next = 'Tulis saran untuk perbaikan pertemuan selanjutnya.'
+    }
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors)
@@ -106,11 +124,11 @@ export default function ParticipantFeedbackForm({
           rating_overall: ratingOverall,
           rating_understanding: ratingUnderstanding,
           rating_room: ratingRoom,
-          note_speaker: noteSpeaker.trim() || null,
-          note_material: noteMaterial.trim() || null,
-          note_practice: notePractice.trim() || null,
-          note_room: noteRoom.trim() || null,
-          note_next: noteNext.trim() || null,
+          note_speaker: noteSpeaker.trim(),
+          note_material: noteMaterial.trim(),
+          note_practice: notePractice.trim(),
+          note_room: noteRoom.trim(),
+          note_next: noteNext.trim(),
         }),
       })
 
@@ -212,95 +230,123 @@ export default function ParticipantFeedbackForm({
           />
         </div>
 
-        {/* 04. Penilaian ruangan (Opsional, 1-5) */}
+        {/* 04. Penilaian ruangan (Wajib, 1-5) */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold text-fg">
-            04. Penilaian ruangan yang digunakan <span className="text-xs font-normal text-muted">(Opsional)</span>
+            04. Penilaian ruangan yang digunakan <span className="text-danger">*</span>
           </label>
           <ScaleInput
             name="room"
             value={ratingRoom}
-            onChange={(val) => setRatingRoom(val)}
+            onChange={(val) => {
+              setRatingRoom(val)
+              if (errors.rating_room) setErrors((prev) => ({ ...prev, rating_room: '' }))
+            }}
             leftLabel="Sangat buruk"
             rightLabel="Sangat baik"
+            error={errors.rating_room}
           />
         </div>
 
-        {/* 05. Masukan untuk pemateri (Opsional) */}
+        {/* 05. Masukan untuk pemateri (Wajib) */}
         <div className="space-y-1.5">
           <label className="block text-sm font-semibold text-fg">
-            05. Masukan dan saran untuk pemateri <span className="text-xs font-normal text-muted">(Opsional)</span>
+            05. Masukan dan saran untuk pemateri <span className="text-danger">*</span>
           </label>
           <textarea
+            required
             value={noteSpeaker}
-            onChange={(e) => setNoteSpeaker(e.target.value)}
+            onChange={(e) => {
+              setNoteSpeaker(e.target.value)
+              if (errors.note_speaker) setErrors((prev) => ({ ...prev, note_speaker: '' }))
+            }}
             rows={2}
             maxLength={2000}
             placeholder="Saran cara penyampaian, tempo, interaksi..."
-            className="field w-full text-sm font-normal"
+            className={`field w-full text-sm font-normal ${errors.note_speaker ? 'border-danger' : ''}`}
           />
+          {errors.note_speaker && <p className="text-xs font-semibold text-danger">{errors.note_speaker}</p>}
         </div>
 
-        {/* 06. Kritik/saran mengenai materi (Opsional) */}
+        {/* 06. Kritik/saran mengenai materi (Wajib) */}
         <div className="space-y-1.5">
           <label className="block text-sm font-semibold text-fg">
-            06. Kritik dan saran mengenai materi <span className="text-xs font-normal text-muted">(Opsional)</span>
+            06. Kritik dan saran mengenai materi <span className="text-danger">*</span>
           </label>
           <textarea
+            required
             value={noteMaterial}
-            onChange={(e) => setNoteMaterial(e.target.value)}
+            onChange={(e) => {
+              setNoteMaterial(e.target.value)
+              if (errors.note_material) setErrors((prev) => ({ ...prev, note_material: '' }))
+            }}
             rows={2}
             maxLength={2000}
             placeholder="Kelengkapan slide, kejelasan modul..."
-            className="field w-full text-sm font-normal"
+            className={`field w-full text-sm font-normal ${errors.note_material ? 'border-danger' : ''}`}
           />
+          {errors.note_material && <p className="text-xs font-semibold text-danger">{errors.note_material}</p>}
         </div>
 
-        {/* 07. Penjelasan saat praktik (Opsional) */}
+        {/* 07. Penjelasan saat praktik (Wajib) */}
         <div className="space-y-1.5">
           <label className="block text-sm font-semibold text-fg">
-            07. Apakah penjelasan saat praktik sudah jelas? (jika ada praktik) <span className="text-xs font-normal text-muted">(Opsional)</span>
+            07. Apakah penjelasan saat praktik sudah jelas? (jika ada praktik) <span className="text-danger">*</span>
           </label>
           <textarea
+            required
             value={notePractice}
-            onChange={(e) => setNotePractice(e.target.value)}
+            onChange={(e) => {
+              setNotePractice(e.target.value)
+              if (errors.note_practice) setErrors((prev) => ({ ...prev, note_practice: '' }))
+            }}
             rows={2}
             maxLength={2000}
             placeholder="Penjelasan peragaan, pendampingan saat praktik..."
-            className="field w-full text-sm font-normal"
+            className={`field w-full text-sm font-normal ${errors.note_practice ? 'border-danger' : ''}`}
           />
+          {errors.note_practice && <p className="text-xs font-semibold text-danger">{errors.note_practice}</p>}
         </div>
 
-        {/* 08. Saran terkait ruangan (Opsional) */}
+        {/* 08. Saran terkait ruangan (Wajib) */}
         <div className="space-y-1.5">
           <label className="block text-sm font-semibold text-fg">
-            08. Saran terkait ruangan yang digunakan <span className="text-xs font-normal text-muted">(Opsional)</span>
+            08. Saran terkait ruangan yang digunakan <span className="text-danger">*</span>
           </label>
           <textarea
+            required
             value={noteRoom}
-            onChange={(e) => setNoteRoom(e.target.value)}
+            onChange={(e) => {
+              setNoteRoom(e.target.value)
+              if (errors.note_room) setErrors((prev) => ({ ...prev, note_room: '' }))
+            }}
             rows={2}
             maxLength={2000}
             placeholder="Suhu AC, pencahayaan, proyektor, kebersihan..."
-            className="field w-full text-sm font-normal"
+            className={`field w-full text-sm font-normal ${errors.note_room ? 'border-danger' : ''}`}
           />
+          {errors.note_room && <p className="text-xs font-semibold text-danger">{errors.note_room}</p>}
         </div>
 
-        {/* 09. Saran perbaikan pertemuan selanjutnya (Opsional) */}
+        {/* 09. Saran perbaikan pertemuan selanjutnya (Wajib) */}
         <div className="space-y-1.5">
           <label className="block text-sm font-semibold text-fg">
-            09. Saran untuk perbaikan pertemuan selanjutnya <span className="text-xs font-normal text-muted">(Opsional)</span>
+            09. Saran untuk perbaikan pertemuan selanjutnya <span className="text-danger">*</span>
           </label>
           <textarea
+            required
             value={noteNext}
-            onChange={(e) => setNoteNext(e.target.value)}
+            onChange={(e) => {
+              setNoteNext(e.target.value)
+              if (errors.note_next) setErrors((prev) => ({ ...prev, note_next: '' }))
+            }}
             rows={2}
             maxLength={2000}
             placeholder="Hal yang perlu ditingkatkan di kegiatan berikutnya..."
-            className="field w-full text-sm font-normal"
+            className={`field w-full text-sm font-normal ${errors.note_next ? 'border-danger' : ''}`}
           />
+          {errors.note_next && <p className="text-xs font-semibold text-danger">{errors.note_next}</p>}
         </div>
-
         {/* Validation note & Submit button */}
         <div className="space-y-2 pt-2 border-t border-line">
           {generalError && (

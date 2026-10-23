@@ -2,18 +2,27 @@ export interface FeedbackPayload {
   materi: string
   rating_overall: number
   rating_understanding: number
-  rating_room?: number | null
-  note_speaker?: string | null
-  note_material?: string | null
-  note_practice?: string | null
-  note_room?: string | null
-  note_next?: string | null
+  rating_room: number
+  note_speaker: string
+  note_material: string
+  note_practice: string
+  note_room: string
+  note_next: string
 }
 
-export interface FeedbackRow extends FeedbackPayload {
+export interface FeedbackRow {
   id: string
   attempt_id: string
   session_id: string
+  materi: string
+  rating_overall: number
+  rating_understanding: number
+  rating_room: number | null
+  note_speaker: string | null
+  note_material: string | null
+  note_practice: string | null
+  note_room: string | null
+  note_next: string | null
   created_at: string
 }
 
@@ -65,31 +74,32 @@ export function validateFeedbackPayload(input: unknown): { errors: Record<string
     errors.rating_understanding = 'Pilih salah satu nilai (1–5).'
   }
 
-  let ratingRoom: number | null = null
-  if (raw.rating_room !== undefined && raw.rating_room !== null && raw.rating_room !== '') {
-    const num = Number(raw.rating_room)
-    if (Number.isInteger(num) && num >= 1 && num <= 5) {
-      ratingRoom = num
-    } else {
-      errors.rating_room = 'Nilai ruangan harus antara 1–5.'
-    }
+  const ratingRoom = Number(raw.rating_room)
+  if (!Number.isInteger(ratingRoom) || ratingRoom < 1 || ratingRoom > 5) {
+    errors.rating_room = 'Pilih salah satu nilai ruangan (1–5).'
   }
 
-  const cleanText = (val: unknown, key: string): string | null => {
-    if (typeof val !== 'string') return null
+  const cleanRequiredText = (val: unknown, key: string, requiredMsg: string): string => {
+    if (typeof val !== 'string') {
+      errors[key] = requiredMsg
+      return ''
+    }
     const trimmed = val.trim()
-    if (!trimmed) return null
+    if (!trimmed) {
+      errors[key] = requiredMsg
+      return ''
+    }
     if (trimmed.length > 2000) {
       errors[key] = 'Teks maksimal 2000 karakter.'
     }
     return trimmed
   }
 
-  const noteSpeaker = cleanText(raw.note_speaker, 'note_speaker')
-  const noteMaterial = cleanText(raw.note_material, 'note_material')
-  const notePractice = cleanText(raw.note_practice, 'note_practice')
-  const noteRoom = cleanText(raw.note_room, 'note_room')
-  const noteNext = cleanText(raw.note_next, 'note_next')
+  const noteSpeaker = cleanRequiredText(raw.note_speaker, 'note_speaker', 'Tulis masukan dan saran untuk pemateri.')
+  const noteMaterial = cleanRequiredText(raw.note_material, 'note_material', 'Tulis kritik dan saran mengenai materi.')
+  const notePractice = cleanRequiredText(raw.note_practice, 'note_practice', 'Tulis masukan terkait penjelasan praktik.')
+  const noteRoom = cleanRequiredText(raw.note_room, 'note_room', 'Tulis saran terkait ruangan yang digunakan.')
+  const noteNext = cleanRequiredText(raw.note_next, 'note_next', 'Tulis saran untuk perbaikan pertemuan selanjutnya.')
 
   if (Object.keys(errors).length > 0) {
     return { errors }
