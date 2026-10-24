@@ -65,7 +65,31 @@ function sessionFields(f: FormData) {
     kind === 'post'
       ? { pre_session_id: pre || null, feedback_url: null, feedback_webhook_url: null }
       : { pre_session_id: null, feedback_url: null, feedback_webhook_url: null }
-  return { title, held_on, kind, timer_mode, ...time, max_violations: int('max_violations', 1, 999), camera_check: f.get('camera_check') === 'on', ...postFields }
+  const survey_enabled = f.get('survey_enabled') === 'on'
+  let survey_questions = null
+  if (survey_enabled) {
+    const rawQuestions = f.get('survey_questions')
+    if (typeof rawQuestions === 'string' && rawQuestions.trim()) {
+      try {
+        const parsed = JSON.parse(rawQuestions)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          survey_questions = parsed
+        }
+      } catch {}
+    }
+  }
+  return {
+    title,
+    held_on,
+    kind,
+    timer_mode,
+    ...time,
+    max_violations: int('max_violations', 1, 999),
+    camera_check: f.get('camera_check') === 'on',
+    survey_enabled,
+    survey_questions,
+    ...postFields,
+  }
 }
 
 // The chosen pair must be an existing pre-test (and not the session itself).
@@ -101,6 +125,8 @@ export async function createSession(formData: FormData) {
       const stripped: Record<string, unknown> = { ...fields }
       delete stripped.feedback_webhook_url
       delete stripped.feedback_url
+      delete stripped.survey_enabled
+      delete stripped.survey_questions
       const fallback = await db().from('exam_sessions').insert({ ...stripped, code: newCode() }).select('id').single()
       if (fallback.data) redirect(`/admin/sessions/${fallback.data.id}`)
       if (fallback.error?.code === '23505') continue
@@ -141,15 +167,13 @@ export async function updateSession(id: string, formData: FormData) {
   if (error) {
     // If the database has not yet been upgraded with feedback_webhook_url or feedback_url, retry progressively
     if ((error as { code?: string }).code === 'PGRST204') {
-      const withoutWebhook = { ...fields }
-      delete withoutWebhook.feedback_webhook_url
-      const retry1 = await db().from('exam_sessions').update(withoutWebhook).eq('id', id)
-      if (retry1.error && (retry1.error as { code?: string }).code === 'PGRST204') {
-        delete withoutWebhook.feedback_url
-        must(await db().from('exam_sessions').update(withoutWebhook).eq('id', id))
-      } else if (retry1.error) {
-        throw retry1.error
-      }
+      const withoutCols: Record<string, unknown> = { ...fields }
+      delete withoutCols.survey_enabled
+      delete withoutCols.survey_questions
+      delete withoutCols.feedback_webhook_url
+      delete withoutCols.feedback_url
+      const retry1 = await db().from('exam_sessions').update(withoutCols).eq('id', id)
+      if (retry1.error) throw retry1.error
     } else {
       throw error
     }
@@ -383,6 +407,8 @@ export async function duplicateSession(sessionId: string) {
         per_question_sec: source.per_question_sec,
         max_violations: source.max_violations,
         camera_check: source.camera_check ?? false,
+        survey_enabled: source.survey_enabled ?? false,
+        survey_questions: source.survey_questions ?? null,
         // A post-test made from a pre-test is paired with it, so scores can be compared.
         ...(newKind === 'post' ? { pre_session_id: source.id } : {}),
         is_open: false,

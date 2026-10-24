@@ -6,6 +6,7 @@ import { UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import type { Session } from '@/lib/exam'
 import type { FeedbackRow } from '@/lib/feedback'
+import type { SurveyAnswerValue, SurveyQuestion } from '@/lib/survey'
 import FeedbackCharts, { type ChartDistribution } from './charts'
 import MaterialsSection, { type MaterialGroup } from './materials-section'
 import NotesSection, { type NoteItem } from './notes-section'
@@ -23,14 +24,17 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
   if (!session || session.kind !== 'post') notFound()
 
   // Fetch all attempts count and feedback rows
-  const [attemptsRes, feedbackRes] = await Promise.all([
+  const [attemptsRes, feedbackRes, surveyRes] = await Promise.all([
     db().from('attempts').select('id, name, nim, prodi, submitted_at').eq('session_id', id).order('name'),
     db().from('feedback').select('*, attempts(name, nim, prodi)').eq('session_id', id).order('created_at', { ascending: false }),
+    db().from('participant_surveys').select('*, attempts(name, nim, prodi)').eq('session_id', id).order('created_at', { ascending: false }),
   ])
 
   const attempts = attemptsRes.data || []
   const feedbacks = feedbackRes.data || []
-
+  const surveys = surveyRes?.data || []
+  const surveyQuestions: SurveyQuestion[] = session.survey_questions && Array.isArray(session.survey_questions) ? session.survey_questions : []
+  const showSurveyCard = Boolean(session.survey_enabled || surveys.length > 0)
   const feedbackAttemptIds = new Set(feedbacks.map((f) => f.attempt_id))
   const unfilledParticipants = attempts
     .filter((a) => !feedbackAttemptIds.has(a.id))
@@ -250,6 +254,70 @@ export default async function AdminFeedbackPage(props: PageProps<'/admin/session
 
       {/* 2.5. Peserta Belum Mengisi Feedback */}
       <UnfilledFeedbackSection participants={unfilledParticipants} />
+      {/* 2.6. Hasil Survei Pengalaman Peserta */}
+      {showSurveyCard && (
+        <section className="card p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+            <div>
+              <h2 className="display text-lg font-bold">Survei Pengalaman Peserta</h2>
+              <p className="text-xs text-muted">
+                {surveys.length} dari {totalAttempts} peserta telah mengisi survei singkat.
+              </p>
+            </div>
+            <span className="badge badge-primary text-xs">{surveys.length} Responden</span>
+          </div>
+
+          {surveys.length === 0 ? (
+            <p className="text-xs text-muted italic">Belum ada respons survei dari peserta.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-surface/50 text-muted font-semibold">
+                    <th className="py-2.5 px-3">Nama</th>
+                    <th className="py-2.5 px-3">NIM</th>
+                    <th className="py-2.5 px-3">Prodi</th>
+                    {surveyQuestions.map((q, idx) => (
+                      <th key={q.id || idx} className="py-2.5 px-3 min-w-[200px]">
+                        {q.text}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {surveys.map((sv: Record<string, unknown>) => {
+                    const att = (sv.attempts && typeof sv.attempts === 'object' ? sv.attempts : {}) as Record<string, unknown>
+                    const answers = (sv.answers && typeof sv.answers === 'object' ? sv.answers : {}) as Record<string, string | SurveyAnswerValue>
+
+                    return (
+                      <tr key={String(sv.id)} className="hover:bg-surface/30">
+                        <td className="py-2.5 px-3 font-medium text-fg">{String(att.name || '-')}</td>
+                        <td className="py-2.5 px-3 text-muted">{String(att.nim || '-')}</td>
+                        <td className="py-2.5 px-3 text-muted">{String(att.prodi || '-')}</td>
+                        {surveyQuestions.map((q, idx) => {
+                          const ans = answers[q.id]
+                          let display = '-'
+                          if (typeof ans === 'object' && ans !== null) {
+                            display = ans.value === 'ya' ? `Ya (${ans.detail || '-'})` : ans.value || '-'
+                          } else if (typeof ans === 'string' && ans) {
+                            display = ans
+                          }
+                          return (
+                            <td key={q.id || idx} className="py-2.5 px-3">
+                              {display}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
 
       {/* 3. Materi yang ditulis peserta */}
       <MaterialsSection groups={materialGroups} />

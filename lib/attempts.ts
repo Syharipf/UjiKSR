@@ -126,7 +126,14 @@ export async function view(ctx: Ctx, now: Date) {
       feedbackSent = Boolean(fb.data)
     } catch {}
   }
-  return buildView(ctx.attempt, ctx.session, ctx.questions, now, results, pre, feedbackSent)
+  let surveySent = false
+  if (ctx.attempt.submitted_at && ctx.session.survey_enabled) {
+    try {
+      const sv = await db().from('participant_surveys').select('id').eq('attempt_id', ctx.attempt.id).maybeSingle()
+      surveySent = Boolean(sv.data)
+    } catch {}
+  }
+  return buildView(ctx.attempt, ctx.session, ctx.questions, now, results, pre, feedbackSent, surveySent)
 }
 
 // A post-test's paired pre-test score for the same NIM (null when there is none). Matched like the

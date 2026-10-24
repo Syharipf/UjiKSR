@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import SubmitButton from '@/app/submit-button'
 import { formatDate, type Session, type TimerMode } from '@/lib/exam'
+import { DEFAULT_SURVEY_QUESTIONS, type SurveyQuestion, type SurveyQuestionType } from '@/lib/survey'
 
 const input = 'field font-normal'
 
@@ -27,6 +28,10 @@ export default function SessionForm({
   const [kind, setKind] = useState(initialKind)
   const [autoSubmit, setAutoSubmit] = useState((session?.max_violations ?? 3) < 999)
   const pairs = preSessions.filter((p) => p.id !== session?.id)
+  const [surveyEnabled, setSurveyEnabled] = useState(session?.survey_enabled ?? false)
+  const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>(
+    session?.survey_questions && session.survey_questions.length > 0 ? session.survey_questions : DEFAULT_SURVEY_QUESTIONS,
+  )
   return (
     <form
       action={action}
@@ -142,6 +147,140 @@ export default function SessionForm({
           </span>
         </span>
       </label>
+      <div className="grid gap-3 sm:col-span-2 rounded-lg border border-border p-4 bg-surface/50">
+        <label className="flex items-start gap-2 cursor-pointer text-sm font-semibold">
+          <input
+            type="checkbox"
+            name="survey_enabled"
+            checked={surveyEnabled}
+            onChange={(e) => setSurveyEnabled(e.target.checked)}
+            className="mt-0.5 size-4 rounded accent-primary"
+          />
+          <span>
+            Aktifkan Survei Pengalaman Peserta Setelah Ujian
+            <span className="block text-xs font-normal text-muted">
+              Peserta mengisi survei singkat setelah menyelesaikan ujian sebelum diarahkan ke pengumuman nilai / feedback evaluasi.
+            </span>
+          </span>
+        </label>
+
+        {surveyEnabled && (
+          <div className="mt-2 grid gap-3 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted">Daftar Pertanyaan Survei ({surveyQuestions.length})</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSurveyQuestions(DEFAULT_SURVEY_QUESTIONS)}
+                  className="btn btn-secondary text-xs px-2.5 py-1"
+                >
+                  Reset ke Template Pertolongan Pertama
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSurveyQuestions((prev) => [
+                      ...prev,
+                      {
+                        id: `q_${Date.now().toString(36)}`,
+                        text: '',
+                        type: 'text',
+                        required: true,
+                      },
+                    ])
+                  }
+                  className="btn btn-secondary text-xs px-2.5 py-1"
+                >
+                  + Tambah Pertanyaan
+                </button>
+              </div>
+            </div>
+
+            {/* Hidden serialized field for form submission */}
+            <input type="hidden" name="survey_questions" value={JSON.stringify(surveyQuestions)} />
+
+            <div className="grid gap-3">
+              {surveyQuestions.map((q, idx) => (
+                <div key={q.id || idx} className="rounded border border-border p-3 grid gap-2 bg-surface text-xs font-normal">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm">Pertanyaan #{idx + 1}</span>
+                    {surveyQuestions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setSurveyQuestions((prev) => prev.filter((_, i) => i !== idx))}
+                        className="text-danger hover:underline"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                  <label className="grid gap-1">
+                    <span className="text-muted">Teks Pertanyaan:</span>
+                    <input
+                      type="text"
+                      value={q.text}
+                      required
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setSurveyQuestions((prev) => prev.map((item, i) => (i === idx ? { ...item, text: val } : item)))
+                      }}
+                      placeholder="Tuliskan pertanyaan survei..."
+                      className={input}
+                    />
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="grid gap-1">
+                      <span className="text-muted">Tipe Jawaban:</span>
+                      <select
+                        value={q.type}
+                        onChange={(e) => {
+                          const type = e.target.value as SurveyQuestionType
+                          setSurveyQuestions((prev) => prev.map((item, i) => (i === idx ? { ...item, type } : item)))
+                        }}
+                        className={input}
+                      >
+                        <option value="yes_no_detail">Ya / Tidak + Penjelasan</option>
+                        <option value="text">Teks Bebas</option>
+                        <option value="yes_no">Ya / Tidak Saja</option>
+                      </select>
+                    </label>
+                    {q.type === 'yes_no_detail' && (
+                      <label className="grid gap-1">
+                        <span className="text-muted">Label Penjelasan (jika Ya):</span>
+                        <input
+                          type="text"
+                          value={q.detail_label ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setSurveyQuestions((prev) => prev.map((item, i) => (i === idx ? { ...item, detail_label: val } : item)))
+                          }}
+                          placeholder="Kalau iya, apa dan di mana?"
+                          className={input}
+                        />
+                      </label>
+                    )}
+                    {q.type === 'text' && (
+                      <label className="grid gap-1">
+                        <span className="text-muted">Placeholder contoh:</span>
+                        <input
+                          type="text"
+                          value={q.placeholder ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setSurveyQuestions((prev) => prev.map((item, i) => (i === idx ? { ...item, placeholder: val } : item)))
+                          }}
+                          placeholder="Contoh: Bukan PMR / PMR Wira..."
+                          className={input}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       <div className="flex items-end">
         <SubmitButton className="btn btn-primary w-full">{submitLabel}</SubmitButton>
       </div>

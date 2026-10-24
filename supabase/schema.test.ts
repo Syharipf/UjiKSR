@@ -75,8 +75,9 @@ describe('schema.sql', () => {
   it('deleting a session removes its questions, images, attempts and violations', async () => {
     await db.query('select add_violation($1, $2)', [attemptId, 'blur'])
     await db.query(`insert into question_images (question_id, mime, data) values ($1, 'image/png', 'AA==')`, [q1])
+    await db.query(`insert into participant_surveys (attempt_id, session_id, answers) select id, session_id, '{"q1":"yes"}'::jsonb from attempts where id = $1`, [attemptId])
     await db.query('delete from exam_sessions')
-    for (const table of ['questions', 'question_images', 'attempts', 'violations']) {
+    for (const table of ['questions', 'question_images', 'attempts', 'violations', 'participant_surveys']) {
       expect((await db.query(`select * from ${table}`)).rows).toEqual([])
     }
   })

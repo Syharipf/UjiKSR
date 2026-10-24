@@ -51,6 +51,19 @@
 --   grant select, insert, update, delete on question_images to service_role;
 -- Upgrading a database created before the camera setting existed? Run just this:
 --   alter table exam_sessions add column camera_check boolean not null default false;
+-- Upgrading a database created before the participant survey existed? Run just this:
+--   alter table exam_sessions add column survey_enabled boolean not null default false;
+--   alter table exam_sessions add column survey_questions jsonb default null;
+--   create table if not exists participant_surveys (
+--     id uuid primary key default gen_random_uuid(),
+--     attempt_id uuid not null unique references attempts (id) on delete cascade,
+--     session_id uuid not null references exam_sessions (id) on delete cascade,
+--     answers jsonb not null default '{}',
+--     created_at timestamptz not null default now()
+--   );
+--   create index if not exists participant_surveys_session_idx on participant_surveys (session_id, created_at desc);
+--   alter table participant_surveys enable row level security;
+--   grant select, insert, update, delete on participant_surveys to service_role;
 
 create table exam_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -69,6 +82,8 @@ create table exam_sessions (
   feedback_url text, -- post-test optional: Google Form or external evaluation survey
   feedback_webhook_url text, -- post-test optional: Google Sheets Webhook URL to inject rows directly into Drive spreadsheet
   camera_check boolean not null default false, -- participants' front camera warns when they look away (use-face-watch.ts)
+  survey_enabled boolean not null default false, -- optional post-exam participant survey
+  survey_questions jsonb default null, -- configured survey questions JSON array
   created_at timestamptz not null default now()
 );
 
@@ -142,6 +157,16 @@ create table feedback (
 create index feedback_session_idx on feedback (session_id, created_at desc);
 alter table feedback enable row level security;
 
+create table participant_surveys (
+  id uuid primary key default gen_random_uuid(),
+  attempt_id uuid not null unique references attempts (id) on delete cascade,
+  session_id uuid not null references exam_sessions (id) on delete cascade,
+  answers jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+create index participant_surveys_session_idx on participant_surveys (session_id, created_at desc);
+alter table participant_surveys enable row level security;
+
 
 -- Merge one answer atomically. Guarded by current_index so a stale per-question
 -- answer (or a concurrent one) updates nothing and returns no row.
@@ -171,4 +196,4 @@ revoke execute on function add_violation(uuid, text) from public, anon, authenti
 grant execute on function record_answer(uuid, text, int, int, int, timestamptz) to service_role;
 grant execute on function add_violation(uuid, text) to service_role;
 grant usage on schema public to service_role;
-grant select, insert, update, delete on exam_sessions, questions, question_images, attempts, violations, feedback to service_role;
+grant select, insert, update, delete on exam_sessions, questions, question_images, attempts, violations, feedback, participant_surveys to service_role;

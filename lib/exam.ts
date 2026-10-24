@@ -1,5 +1,6 @@
 // Pure exam rules: ordering, timing, grading and what the participant may see.
 // Shared by API routes (server) and the exam page (types only + GRACE_MS).
+import type { SurveyQuestion } from './survey'
 
 export type TimerMode = 'total' | 'per_question'
 export type SubmitReason = 'manual' | 'timeout' | 'violation'
@@ -21,6 +22,8 @@ export interface Session {
   feedback_url?: string | null // post-test optional: Google Form / feedback questionnaire link
   feedback_webhook_url?: string | null // post-test optional: Google Sheets Webhook URL to inject rows directly into Drive
   camera_check?: boolean // participants' front camera warns when they look away (absent on databases not yet upgraded = off)
+  survey_enabled?: boolean // optional participant survey after submit
+  survey_questions?: SurveyQuestion[] | null
 }
 
 // Open = opened by the committee and the exam not yet over.
@@ -125,6 +128,8 @@ export interface ExamView {
   feedback_url?: string | null
   // Post-test only: whether the participant has already submitted feedback
   feedback_sent?: boolean
+  survey_questions?: SurveyQuestion[] | null
+  survey_sent?: boolean
 }
 
 export interface ResultsStatus {
@@ -226,6 +231,7 @@ export function buildView(
   results = NOT_RELEASED,
   preScore?: number | null,
   feedbackSent?: boolean,
+  surveySent?: boolean,
 ): ExamView {
   const submitted = a.submitted_at !== null
   const waiting = !submitted && !hasStarted(s, now.getTime())
@@ -261,6 +267,9 @@ export function buildView(
     answers,
     ...(submitted && s.kind === 'post' && s.feedback_url ? { feedback_url: s.feedback_url } : {}),
     ...(submitted && s.kind === 'post' ? { feedback_sent: feedbackSent ?? false } : {}),
+    ...(submitted && s.survey_enabled && s.survey_questions && s.survey_questions.length > 0
+      ? { survey_questions: s.survey_questions, survey_sent: surveySent ?? false }
+      : {}),
     results_at: submitted && !results.released ? results.at : null,
     ...(submitted && results.released && a.score !== null
       ? {

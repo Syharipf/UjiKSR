@@ -15,6 +15,7 @@ import { useAntiCheat } from './use-anti-cheat'
 import { useFaceWatch } from './use-face-watch'
 import ParticipantFeedbackForm from './feedback-form'
 import { playFinishSound, triggerViolationVibration } from './sound'
+import { SurveyModal } from './survey-modal'
 
 type ApiError = Error & { status?: number }
 
@@ -671,7 +672,8 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
   const celebrate = view.submit_reason !== 'violation'
   const title = celebrate ? 'Selamat, kamu sudah selesai!' : 'Ujian dikumpulkan otomatis'
   const [feedbackSent, setFeedbackSent] = useState(view.feedback_sent ?? false)
-
+  const [surveySent, setSurveySent] = useState(view.survey_sent ?? false)
+  const showSurvey = Boolean(view.survey_questions && view.survey_questions.length > 0 && !surveySent)
   useEffect(() => {
     if (celebrate) {
       playFinishSound()
@@ -688,6 +690,13 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
           body="Jawaban terkirim. Nilai akan muncul di halaman ini setelah panitia menutup sesi dan semua peserta selesai. Biarkan halaman ini terbuka, atau buka lagi QR/link ujian nanti."
         >
           {celebrate && <Confetti />}
+          {showSurvey && (
+            <SurveyModal
+              attemptId={id}
+              questions={view.survey_questions!}
+              onSubmitted={() => setSurveySent(true)}
+            />
+          )}
         </Notice>
         {view.kind === 'post' && (
           <main className="mx-auto w-full max-w-md px-4.5 pb-24">
@@ -702,6 +711,13 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
       <div className="flex min-h-dvh flex-col">
         <Notice fill={view.kind !== 'post'} title={title} body="Jawaban terkirim. Nilai semua peserta muncul serentak dalam">
           {celebrate && <Confetti />}
+          {showSurvey && (
+            <SurveyModal
+              attemptId={id}
+              questions={view.survey_questions!}
+              onSubmitted={() => setSurveySent(true)}
+            />
+          )}
           <ReleaseCountdown at={view.results_at ?? 0} offset={offset} />
         </Notice>
         {view.kind === 'post' && (
@@ -717,6 +733,13 @@ function Submitted({ id, view, offset }: Readonly<{ id: string; view: ExamView; 
   return (
     <div className="flex min-h-dvh flex-col">
       {celebrate && <Confetti key="score" /> /* new key: replay the burst when the score arrives */}
+      {showSurvey && (
+        <SurveyModal
+          attemptId={id}
+          questions={view.survey_questions!}
+          onSubmitted={() => setSurveySent(true)}
+        />
+      )}
       <header className="bg-band text-on-band">
         <div className="mx-auto flex max-w-md flex-col gap-5 px-5 pt-5 pb-5">
           <div className="flex items-center justify-between gap-3">

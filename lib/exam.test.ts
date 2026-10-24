@@ -263,4 +263,27 @@ describe('buildView', () => {
     expect(v1.deadline_at).toBe(T0 + 600_000)
     expect(v2.deadline_at).toBe(T0 + 900_000)
   })
+  it('includes survey_questions and survey_sent only when submitted and survey_enabled is true', () => {
+    const surveyQuestions = [{ id: 'q1', text: 'Paham?', type: 'yes_no' as const }]
+    const s = session({ survey_enabled: true, survey_questions: surveyQuestions })
+    const active = attempt()
+    const submitted = attempt({ submitted_at: iso(T0 + 100_000) })
+
+    // Active (not submitted) -> no survey
+    expect(buildView(active, s, questions, new Date(T0)).survey_questions).toBeUndefined()
+
+    // Submitted and survey not sent -> survey_questions present and survey_sent false
+    const viewNotSent = buildView(submitted, s, questions, new Date(T0), undefined, undefined, undefined, false)
+    expect(viewNotSent.survey_questions).toEqual(surveyQuestions)
+    expect(viewNotSent.survey_sent).toBe(false)
+
+    // Submitted and survey sent -> survey_questions present and survey_sent true
+    const viewSent = buildView(submitted, s, questions, new Date(T0), undefined, undefined, undefined, true)
+    expect(viewSent.survey_questions).toEqual(surveyQuestions)
+    expect(viewSent.survey_sent).toBe(true)
+
+    // Submitted but session survey_enabled false -> no survey
+    const sDisabled = session({ survey_enabled: false, survey_questions: surveyQuestions })
+    expect(buildView(submitted, sDisabled, questions, new Date(T0)).survey_questions).toBeUndefined()
+  })
 })

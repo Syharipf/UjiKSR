@@ -3,7 +3,8 @@ import { isAdmin } from '@/lib/admin-auth'
 import { finalizeExpired } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { generateXlsxBuffer, formatDateTime } from '@/lib/excel'
-import type { Attempt } from '@/lib/exam'
+import type { Attempt, Session } from '@/lib/exam'
+import type { SurveyAnswerValue, SurveyQuestion } from '@/lib/survey'
 
 const REASON = { manual: 'selesai', timeout: 'waktu habis', violation: 'auto-submit pelanggaran' } as const
 
@@ -11,8 +12,19 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
   if (!(await isAdmin())) return new Response('Unauthorized', { status: 401 })
   const { id } = await ctx.params
   await finalizeExpired(id)
-  const session: { code: string; kind: string } = must(await db().from('exam_sessions').select('code, kind').eq('id', id).single())
+  const session: Pick<Session, 'code' | 'kind' | 'survey_enabled' | 'survey_questions'> = must(
+    await db().from('exam_sessions').select('code, kind, survey_enabled, survey_questions').eq('id', id).single(),
+  )
   const attempts: Attempt[] = must(await db().from('attempts').select('*').eq('session_id', id).order('name'))
+
+  // Fetch surveys if enabled or present
+  let surveysByAttempt = new Map<string, Record<string, string | SurveyAnswerValue>>()
+  const surveyQuestions: SurveyQuestion[] = session.survey_questions && Array.isArray(session.survey_questions) ? session.survey_questions : []
+  try {
+    const svList = (await db().from('participant_surveys').select('attempt_id, answers').eq('session_id', id)).data || []
+    surveysByAttempt = new Map(svList.map((s) => [s.attempt_id, (s.answers as Record<string, string | SurveyAnswerValue>) || {}]))
+  } catch {}
+  const hasSurveys = surveyQuestions.length > 0 || surveysByAttempt.size > 0
 
   // Fetch feedbacks for post-test sessions (tolerant if table doesn't exist yet)
   let feedbacksByAttempt = new Map<string, { rating: number; clarity: number | null; difficulty: string | null; comment: string | null }>()
@@ -34,6 +46,20 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
           nilai: a.score ?? '',
           pelanggaran: a.violation_count,
           status: a.submit_reason ? REASON[a.submit_reason] : 'belum selesai',
+          ...(hasSurveys
+            ? Object.fromEntries(
+                surveyQuestions.map((q, i) => {
+                  const ans = surveysByAttempt.get(a.id)?.[q.id]
+                  let text = ''
+                  if (typeof ans === 'object' && ans !== null) {
+                    text = ans.value === 'ya' ? `Ya (${ans.detail || '-'})` : ans.value || ''
+                  } else if (typeof ans === 'string') {
+                    text = ans
+                  }
+                  return [`survei_${i + 1}_${q.text.slice(0, 30).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, text]
+                }),
+              )
+            : {}),
           ...(session.kind === 'post'
             ? {
                 rating_feedback: fb ? fb.rating : '',
@@ -64,6 +90,20 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
       nilai: a.score ?? '',
       pelanggaran: a.violation_count,
       status: a.submit_reason ? REASON[a.submit_reason] : 'belum selesai',
+      ...(hasSurveys
+        ? Object.fromEntries(
+            surveyQuestions.map((q, i) => {
+              const ans = surveysByAttempt.get(a.id)?.[q.id]
+              let text = '-'
+              if (typeof ans === 'object' && ans !== null) {
+                text = ans.value === 'ya' ? `Ya (${ans.detail || '-'})` : ans.value || '-'
+              } else if (typeof ans === 'string' && ans) {
+                text = ans
+              }
+              return [`survei_${i + 1}: ${q.text}`, text]
+            }),
+          )
+        : {}),
       ...(session.kind === 'post'
         ? {
             rating_feedback: fb ? `${fb.rating}/5` : '-',
