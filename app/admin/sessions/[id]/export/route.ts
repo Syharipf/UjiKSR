@@ -26,19 +26,10 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
   } catch {}
   const hasSurveys = surveyQuestions.length > 0 || surveysByAttempt.size > 0
 
-  // Fetch feedbacks for post-test sessions (tolerant if table doesn't exist yet)
-  let feedbacksByAttempt = new Map<string, { rating: number; clarity: number | null; difficulty: string | null; comment: string | null }>()
-  if (session.kind === 'post') {
-    try {
-      const fbList = (await db().from('feedback').select('attempt_id, rating, clarity, difficulty, comment').eq('session_id', id)).data || []
-      feedbacksByAttempt = new Map(fbList.map((f) => [f.attempt_id, f]))
-    } catch {}
-  }
   const format = new URL(_req.url).searchParams.get('format')?.toLowerCase()
   if (format === 'csv') {
     const csv = Papa.unparse(
       attempts.map((a) => {
-        const fb = feedbacksByAttempt.get(a.id)
         return {
           nama: a.name,
           nim: a.nim,
@@ -60,13 +51,6 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
                 }),
               )
             : {}),
-          ...(session.kind === 'post'
-            ? {
-                rating_feedback: fb ? fb.rating : '',
-                kesulitan_materi: fb ? (fb.difficulty ?? '') : '',
-                kritik_saran: fb ? (fb.comment ?? '') : '',
-              }
-            : {}),
           mulai: a.started_at,
           selesai: a.submitted_at ?? '',
         }
@@ -82,7 +66,6 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
   }
 
   const rows = attempts.map((a) => {
-    const fb = feedbacksByAttempt.get(a.id)
     return {
       nama: a.name,
       nim: a.nim,
@@ -103,13 +86,6 @@ export async function GET(_req: Request, ctx: RouteContext<'/admin/sessions/[id]
               return [`survei_${i + 1}: ${q.text}`, text]
             }),
           )
-        : {}),
-      ...(session.kind === 'post'
-        ? {
-            rating_feedback: fb ? `${fb.rating}/5` : '-',
-            kesulitan: fb ? (fb.difficulty === 'easy' ? 'Mudah' : fb.difficulty === 'medium' ? 'Sedang' : fb.difficulty === 'hard' ? 'Sulit' : '-') : '-',
-            kritik_saran: fb?.comment || '-',
-          }
         : {}),
       mulai: formatDateTime(a.started_at),
       selesai: formatDateTime(a.submitted_at),
