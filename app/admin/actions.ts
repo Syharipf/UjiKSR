@@ -124,12 +124,13 @@ export async function createSession(formData: FormData) {
   for (let i = 0; i < 5; i++) {
     const { data, error } = await db().from('exam_sessions').insert({ ...fields, code: newCode() }).select('id').single()
     if (error?.code === '23505') continue // code collision, try another
-    if (error?.code === 'PGRST204') {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST204') {
+      const errMessage = 'message' in error && typeof error.message === 'string' ? error.message : ''
       const stripped: Record<string, unknown> = { ...fields }
-      delete stripped.feedback_webhook_url
-      delete stripped.feedback_url
-      delete stripped.survey_enabled
-      delete stripped.survey_questions
+      if (errMessage.includes('feedback_webhook_url')) delete stripped.feedback_webhook_url
+      if (errMessage.includes('feedback_url')) delete stripped.feedback_url
+      if (errMessage.includes('survey_enabled')) delete stripped.survey_enabled
+      if (errMessage.includes('survey_questions')) delete stripped.survey_questions
       const fallback = await db().from('exam_sessions').insert({ ...stripped, code: newCode() }).select('id').single()
       if (fallback.data) redirect(`/admin/sessions/${fallback.data.id}`)
       if (fallback.error?.code === '23505') continue
@@ -169,12 +170,13 @@ export async function updateSession(id: string, formData: FormData) {
   const { error } = await db().from('exam_sessions').update(fields).eq('id', id)
   if (error) {
     // If the database has not yet been upgraded with feedback_webhook_url or feedback_url, retry progressively
-    if ((error as { code?: string }).code === 'PGRST204') {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST204') {
+      const errMessage = 'message' in error && typeof error.message === 'string' ? error.message : ''
       const withoutCols: Record<string, unknown> = { ...fields }
-      delete withoutCols.survey_enabled
-      delete withoutCols.survey_questions
-      delete withoutCols.feedback_webhook_url
-      delete withoutCols.feedback_url
+      if (errMessage.includes('feedback_webhook_url')) delete withoutCols.feedback_webhook_url
+      if (errMessage.includes('feedback_url')) delete withoutCols.feedback_url
+      if (errMessage.includes('survey_enabled')) delete withoutCols.survey_enabled
+      if (errMessage.includes('survey_questions')) delete withoutCols.survey_questions
       const retry1 = await db().from('exam_sessions').update(withoutCols).eq('id', id)
       if (retry1.error) throw retry1.error
     } else {
