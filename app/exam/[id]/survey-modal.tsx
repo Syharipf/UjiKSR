@@ -53,15 +53,6 @@ export function SurveyModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
       <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl">
-        <div className="mb-4">
-          <div className="inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            Survei Singkat Peserta
-          </div>
-          <h2 className="display mt-1 text-xl font-bold">Pengalaman Sebelum Ujian</h2>
-          <p className="mt-1 text-xs text-muted">
-            Mohon bantu isi survei singkat di bawah ini sebelum melihat hasil ujian / mengisi feedback.
-          </p>
-        </div>
 
         {error && (
           <div className="mb-4 rounded-xl border border-danger/30 bg-danger-soft p-3 text-xs text-danger">
