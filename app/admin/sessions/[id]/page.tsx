@@ -531,7 +531,13 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
               {locked && (
                 <p className="-mt-2 mb-4 text-sm text-muted">Mode timer, durasi, dan waktu per soal terkunci karena sudah ada peserta atau ujian sudah dimulai.</p>
               )}
-              <SessionForm action={updateSession.bind(null, id)} session={session} submitLabel="Simpan pengaturan" preSessions={preOptions} />
+              <SessionForm
+                key={`${session.id}:${String(session.survey_enabled)}`}
+                action={updateSession.bind(null, id)}
+                session={session}
+                submitLabel="Simpan pengaturan"
+                preSessions={preOptions}
+              />
               <form action={deleteSession.bind(null, id)} className="mt-6 border-t border-line pt-4">
                 <SubmitButton
                   confirm={`Hapus sesi "${session.title}" beserta ${questions.length} soal dan ${attempts.length} peserta? Tidak bisa dibatalkan.`}
