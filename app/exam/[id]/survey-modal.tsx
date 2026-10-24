@@ -53,6 +53,11 @@ export function SurveyModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
       <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl">
+        <div className="mb-3">
+          <span className="inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+            Survei Singkat
+          </span>
+        </div>
 
         {error && (
           <div className="mb-4 rounded-xl border border-danger/30 bg-danger-soft p-3 text-xs text-danger">
