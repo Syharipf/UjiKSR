@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { finalizeExpired, resultsStatus, UUID } from '@/lib/attempts'
 import { db, must } from '@/lib/db'
 import { formatDate, hasStarted, isOpen, questionImageUrl, type Attempt, type Question, type ResultsStatus, type Session } from '@/lib/exam'
+import type { SurveyAnswerValue, SurveyQuestion } from '@/lib/survey'
 import { calculateQuestionAccuracy, calculateScoreDistribution, calculateSessionStats } from '@/lib/report'
 import { deleteQuestion, deleteSession, duplicateSession, extendSession, resetAllAttempts, saveQuestion, setOpen, startExam, updateSession, uploadQuestions } from '../../actions'
 import LinkPending from '@/app/link-pending'
@@ -47,7 +48,7 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
 
   await finalizeExpired(id)
 
-  const [questions, attempts, violations, results, preSessions, feedbacks] = await Promise.all([
+  const [questions, attempts, violations, results, preSessions, feedbacks, surveys] = await Promise.all([
     db().from('questions').select('*').eq('session_id', id).order('position').then(must) as Promise<Question[]>,
     db().from('attempts').select('*').eq('session_id', id).order('started_at').order('name').then(must) as Promise<Attempt[]>,
     db()
@@ -65,6 +66,12 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
           .eq('session_id', id)
           .then((r) => r.data || [])
       : Promise.resolve([]),
+    db()
+      .from('participant_surveys')
+      .select('*, attempts(name, nim, prodi)')
+      .eq('session_id', id)
+      .order('created_at', { ascending: false })
+      .then((r) => r.data || []),
   ])
 
   const sessionsById = new Map(preSessions.map((p) => [p.id, p]))
@@ -134,7 +141,9 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
 
       <SessionTabs
         isPost={session.kind === 'post'}
+        hasSurvey={Boolean(session.survey_enabled || surveys.length > 0)}
         feedbackCount={feedbacks.length}
+        surveyCount={surveys.length}
         participantCount={attempts.length}
         questionCount={questions.length}
       >
@@ -423,6 +432,75 @@ export default async function SessionAdminPage(props: PageProps<'/admin/sessions
               )}
             </section>
           ),
+          survei: Boolean(session.survey_enabled || surveys.length > 0) ? (
+            <section className="card p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+                <div>
+                  <h2 className="display text-lg font-bold">Survei Pengalaman Peserta ({surveys.length})</h2>
+                  <p className="text-xs text-muted">
+                    {surveys.length} dari {attempts.length} peserta telah mengisi survei singkat.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <a href={`/admin/sessions/${id}/export?format=xlsx`} className="btn btn-secondary text-sm">
+                    Unduh Rekap Lengkap (Excel)
+                  </a>
+                </div>
+              </div>
+
+              {surveys.length === 0 ? (
+                <p className="text-xs text-muted italic py-4 text-center">Belum ada respons survei dari peserta.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-line bg-surface/50 text-muted font-semibold">
+                        <th className="py-2.5 px-3">Nama</th>
+                        <th className="py-2.5 px-3">NIM</th>
+                        <th className="py-2.5 px-3">Prodi</th>
+                        {((session.survey_questions && Array.isArray(session.survey_questions) ? session.survey_questions : []) as SurveyQuestion[]).map(
+                          (q, idx) => (
+                            <th key={q.id || idx} className="py-2.5 px-3 min-w-[200px]">
+                              {q.text}
+                            </th>
+                          ),
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {surveys.map((sv: Record<string, unknown>) => {
+                        const att = (sv.attempts && typeof sv.attempts === 'object' ? sv.attempts : {}) as Record<string, unknown>
+                        const answers = (sv.answers && typeof sv.answers === 'object' ? sv.answers : {}) as Record<string, string | SurveyAnswerValue>
+                        const questionsList = (session.survey_questions && Array.isArray(session.survey_questions) ? session.survey_questions : []) as SurveyQuestion[]
+
+                        return (
+                          <tr key={String(sv.id)} className="hover:bg-surface/30">
+                            <td className="py-2.5 px-3 font-medium text-fg">{String(att.name || '-')}</td>
+                            <td className="py-2.5 px-3 text-muted">{String(att.nim || '-')}</td>
+                            <td className="py-2.5 px-3 text-muted">{String(att.prodi || '-')}</td>
+                            {questionsList.map((q, idx) => {
+                              const ans = answers[q.id]
+                              let display = '-'
+                              if (typeof ans === 'object' && ans !== null) {
+                                display = ans.value === 'ya' ? `Ya (${ans.detail || '-'})` : ans.value || '-'
+                              } else if (typeof ans === 'string' && ans) {
+                                display = ans
+                              }
+                              return (
+                                <td key={q.id || idx} className="py-2.5 px-3">
+                                  {display}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          ) : undefined,
 
           feedback: session.kind === 'post' ? (
             <div className="space-y-4">

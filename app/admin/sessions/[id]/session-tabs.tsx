@@ -2,23 +2,28 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
-export type TabKey = 'kontrol' | 'peserta' | 'soal' | 'feedback' | 'pengaturan'
+export type TabKey = 'kontrol' | 'peserta' | 'soal' | 'survei' | 'feedback' | 'pengaturan'
 
 export default function SessionTabs({
   isPost,
+  hasSurvey,
   feedbackCount,
+  surveyCount,
   participantCount,
   questionCount,
   children,
 }: Readonly<{
   isPost: boolean
+  hasSurvey?: boolean
   feedbackCount: number
+  surveyCount?: number
   participantCount: number
   questionCount: number
   children: {
     kontrol: React.ReactNode
     peserta: React.ReactNode
     soal: React.ReactNode
+    survei?: React.ReactNode
     feedback?: React.ReactNode
     pengaturan: React.ReactNode
   }
@@ -29,7 +34,7 @@ export default function SessionTabs({
 
   const rawTab = searchParams.get('tab') as TabKey | null
   const tab: TabKey =
-    rawTab === 'peserta' || rawTab === 'soal' || (rawTab === 'feedback' && isPost) || rawTab === 'pengaturan'
+    rawTab === 'peserta' || rawTab === 'soal' || (rawTab === 'survei' && hasSurvey) || (rawTab === 'feedback' && isPost) || rawTab === 'pengaturan'
       ? rawTab
       : 'kontrol'
 
@@ -48,6 +53,7 @@ export default function SessionTabs({
     { key: 'kontrol', label: 'Kontrol' },
     { key: 'peserta', label: 'Peserta', count: participantCount },
     { key: 'soal', label: 'Soal', count: questionCount },
+    ...(hasSurvey ? [{ key: 'survei' as TabKey, label: 'Survei', count: surveyCount }] : []),
     ...(isPost ? [{ key: 'feedback' as TabKey, label: 'Feedback', count: feedbackCount }] : []),
     { key: 'pengaturan', label: 'Pengaturan' },
   ]
@@ -87,6 +93,7 @@ export default function SessionTabs({
         {tab === 'kontrol' && children.kontrol}
         {tab === 'peserta' && children.peserta}
         {tab === 'soal' && children.soal}
+        {tab === 'survei' && children.survei}
         {tab === 'feedback' && children.feedback}
         {tab === 'pengaturan' && children.pengaturan}
       </div>
