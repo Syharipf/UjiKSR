@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import SubmitButton from '@/app/submit-button'
 import { formatDate, type Session, type TimerMode } from '@/lib/exam'
 import { DEFAULT_SURVEY_QUESTIONS, type SurveyQuestion, type SurveyQuestionType } from '@/lib/survey'
@@ -32,6 +32,15 @@ export default function SessionForm({
   const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>(
     session?.survey_questions && session.survey_questions.length > 0 ? session.survey_questions : DEFAULT_SURVEY_QUESTIONS,
   )
+  useEffect(() => {
+    setSurveyEnabled(session?.survey_enabled ?? false)
+    setSurveyQuestions(
+      session?.survey_questions && session.survey_questions.length > 0 ? session.survey_questions : DEFAULT_SURVEY_QUESTIONS,
+    )
+    setMode(session?.timer_mode ?? 'per_question')
+    setKind(session?.kind ?? 'pre')
+    setAutoSubmit((session?.max_violations ?? 3) < 999)
+  }, [session])
   return (
     <form
       action={action}

@@ -2,6 +2,7 @@
 
 import { randomInt } from 'node:crypto'
 import { cookies } from 'next/headers'
+import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { COOKIE, makeToken, passwordMatches, TTL_MS } from '@/lib/admin-token'
@@ -11,8 +12,10 @@ import { finishRound, forceSubmitAll as attemptsForceSubmitAll, invalidateResult
 import { db, must } from '@/lib/db'
 import { cleanTopic, isOpen, START_DELAY_MS, timing, type Question, type Session } from '@/lib/exam'
 
-const back = (id: string, msg: string, tab?: string) =>
+const back = (id: string, msg: string, tab?: string) => {
+  revalidatePath(`/admin/sessions/${id}`)
   redirect(`/admin/sessions/${id}?msg=${encodeURIComponent(msg)}${tab ? `&tab=${tab}` : ''}`)
+}
 
 export async function login(formData: FormData) {
   if (!process.env.ADMIN_PASSWORD) {
